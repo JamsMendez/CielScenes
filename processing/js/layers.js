@@ -1033,7 +1033,13 @@ function orbitBlockState(cx, cy, phase, block) {
 // Linux mini optimization begin (O2): orbitBlockState returns a new object per block and frame (32 per
 // frame). Mini evaluates the same expressions inline; the call stream is identical to the reference
 // except the fill colour, which comes from the O2b alpha table.
+// Wallpaper scaling (odd/tasks/scene-wallpaper-scaling.md T1): the block sizes (7-19 px) and their glow blur are
+// absolute px tuned on a >= 1080 px short side, while the ring radius follows min(W, H). The wallpaper scales each
+// block's local frame by k = min(1, min(W, H) / 1080) after its rotate, so the block and its glow sprite (same
+// bucket, same blur, stamped in that frame) shrink together; at >= 1080 and in mini (structurePx already scales
+// there) k is 1 and no scale call is made, so those streams stay exactly as before.
 function drawMiniOrbitBlocks(cx, cy, phase) {
+  const wallpaperBlockScale = isMiniVariant ? 1 : Math.min(1, Math.min(W, H) / 1080);
   ctx.save();
   for (let i = 0; i < orbitBlocks.length; i++) {
     const block = orbitBlocks[i];
@@ -1057,6 +1063,7 @@ function drawMiniOrbitBlocks(cx, cy, phase) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(rotation);
+    if (wallpaperBlockScale !== 1) ctx.scale(wallpaperBlockScale, wallpaperBlockScale);
     ctx.fillStyle = layerRgba(MINI_ORBIT_BLOCK_RGBA, opacity);
     stampGlow('orbit-block', size * 1.64, size * 1.08, ORBIT_BLOCK_GLOW_ALPHA * opacity);
     ctx.globalAlpha = 1;
