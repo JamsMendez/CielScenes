@@ -171,16 +171,20 @@ function buildRingCaches(cx, cy, basis, dpr) {
 
     return { content, size, radius };
   });
-  ringCacheBasis = basis;
-  ringCacheDpr = dpr;
   // Linux mini optimization begin (O1): mini never draws the combined lighting mask (see renderFrame), so
   // it is not built there either.
   if (isMiniVariant) {
     combinedLightingMask = null;
+    ringCacheBasis = basis;
+    ringCacheDpr = dpr;
     return;
   }
   // Linux mini optimization end.
   buildCombinedLightingMask(basis, dpr);
+  // Committed LAST: the frame loop rebuilds whenever this key differs from the current basis/DPR, so a
+  // mask build that throws above must leave the key stale and be retried next frame, not look built.
+  ringCacheBasis = basis;
+  ringCacheDpr = dpr;
 }
 
 // IDL-12 perf: ONE screen-fixed lighting mask covering every rotating ring's annulus, replacing
