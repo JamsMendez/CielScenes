@@ -183,12 +183,20 @@ function glyphRingMiniScale() {
   return coreRadius(Math.min(W, H)) / coreRadius(1080);
 }
 
+// Wallpaper scaling (odd/tasks/scene-wallpaper-scaling.md T2): the wallpaper scales the 10 px margin and 20 px gap
+// too, but only down (min(1, scale)): below a 1080 px short side they shrink with the composition so the glyphs keep
+// their stretched proportions instead of collapsing into dashes; at >= 1080 they stay the absolute px they were.
+function glyphRingPxScale() {
+  const scale = glyphRingMiniScale();
+  return isMiniVariant ? scale : Math.min(1, scale);
+}
+
 function glyphRingEdgeMarginPx() {
-  return isMiniVariant ? GLYPH_RING_EDGE_MARGIN_PX * glyphRingMiniScale() : GLYPH_RING_EDGE_MARGIN_PX;
+  return GLYPH_RING_EDGE_MARGIN_PX * glyphRingPxScale();
 }
 
 function glyphRingGapPx() {
-  return isMiniVariant ? GLYPH_RING_GAP_PX * glyphRingMiniScale() : GLYPH_RING_GAP_PX;
+  return GLYPH_RING_GAP_PX * glyphRingPxScale();
 }
 
 // The gold ring's glyph count for glyphs `targetWidth` wide (the same in every variant, see config.js's
