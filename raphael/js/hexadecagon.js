@@ -15,7 +15,18 @@
 // every ring radius, including the blue ring's outer edge, by a factor of THIS r) — so the whole
 // concentric system scales together and the outer edge lands exactly at the target, not just
 // proportionally with the viewport (a fixed pixel margin cannot be a pure proportion of minD).
+// T3 (odd/tasks/scene-wallpaper-scaling.md): the mini (isMiniVariant, shared/js/render-loop.js, resolved at call
+// time) drops the 50 px margin and is purely proportional, so its outermost full circle -- the blue ring's outer
+// delimiter, r * GLYPH_RING_BLUE_OUTER_FACTOR, drawn magnified by MINI_SCENE_ZOOM -- is exactly
+// MINI_RING_RADIUS_FRACTION of the short side like idle/explorer's mini ring:
+//   r = minD * 0.40 / (2.35 * 1.3507) = 0.12602 * minD   ->   r * 2.35 * 1.3507 = 0.40 * minD
+// (e.g. 30.25 px core, 96 px ring at 240). The wallpaper keeps the margin-based radius below.
 function coreRadius(minD) {
+  if (isMiniVariant) return minD * MINI_RING_RADIUS_FRACTION / (GLYPH_RING_BLUE_OUTER_FACTOR * MINI_SCENE_ZOOM);
+  return wallpaperCoreRadius(minD);
+}
+
+function wallpaperCoreRadius(minD) {
   const outerTarget = minD / 2 - GLYPH_SYSTEM_OUTER_MARGIN_PX;
   const marginBased = outerTarget / GLYPH_RING_BLUE_OUTER_FACTOR;
   // RAP-19c: a tiny viewport (min(W,H) <= 2 * GLYPH_SYSTEM_OUTER_MARGIN_PX) makes the margin-based

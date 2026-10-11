@@ -38,18 +38,26 @@ const viewZoom = 1;
 // mini-scene-window T2: the mini variant magnifies the composition about its center so the gold ring
 // fills most of the small square window (the full scene's own geometry is sized for a landscape
 // screen, where the ring is only ~65% of the short side).
-// B6 (CieLinux): was 1.2, which left the blue outer ring at (120 - 50) * 1.2 = 84 px in the 240 px mini,
-// 12.5% smaller than idle/explorer's 0.40 * 240 = 96 px ring. The exact 96 px does not fit: the scene
-// centre (W*0.505, H*0.515) sits hypot(1.2, 3.6) = 3.79 px off the window centre, so the far edge would
-// pass the 0.41 * 240 = 98.4 px opaque edge-fade radius (render-loop.js MINI_EDGE_FADE_INNER). The
-// largest zoom that stays inside is (98.4 - 3.79) / 70 = 1.3515; 1.3507 keeps ~0.06 px of margin and gives
-// a 94.55 px ring (tests/disc.contract.test.mjs B6). src/view.qml discFor uses the same value.
+// B6 (CieLinux): was 1.2; 1.3507 brought the 240 px mini's blue outer ring to 94.55 px, next to idle/explorer's
+// 0.40 * 240 = 96 px ring, but only at 240 px: the ring was (side/2 - 50) * zoom about (0.505W, 0.515H), so the
+// 50 px margin made it 0.441 * side at 288 and 0.338 * side at 200 (odd/tasks/scene-wallpaper-scaling.md).
+// T3 (scene-wallpaper-scaling): the mini is now centred at (W/2, H/2) and its radius is proportional (see
+// coreRadius in js/hexadecagon.js), so the outer ring is exactly MINI_RING_RADIUS_FRACTION * side at every size.
+// The zoom keeps its value: it still magnifies the fixed-px strokes/blurs drawn inside the zoom transform.
 const MINI_SCENE_ZOOM = 1.3507;
+// T3: the mini's outermost full circle (the blue ring's outer delimiter, as drawn: magnified by MINI_SCENE_ZOOM)
+// is this fraction of the short side, the same as idle/explorer's mini (their MINI_RING_RADIUS_FRACTION). Centred,
+// its far edge (0.40 * side + half the 2 px delimiter * zoom) stays inside the 0.41 * side opaque edge-fade radius
+// (render-loop.js MINI_EDGE_FADE_INNER) down to a 135 px window.
+const MINI_RING_RADIUS_FRACTION = 0.40;
 // mini-scene-window T2e: the mini nebula's alpha fade, in half-side units from the window center
 // (1.0 = the middle of an edge). Wider than processing's (0.5..0.9) so the gold cloud reaches out toward
-// the edges, but it is 0 at 0.98, so every edge and corner pixel stays fully transparent.
-const MINI_NEBULA_FADE_START = 0.75;
-const MINI_NEBULA_FADE_END = 0.98;
+// the edges, but it is 0 at its end, so every edge and corner pixel stays fully transparent.
+// T3 (scene-wallpaper-scaling): was 0.75..0.98, tuned at 288 px where the outer ring sat at 0.882 half-sides
+// ((144 - 50) * 1.3507 / 144). The ring is now 0.80 half-sides at every size, so both ends are scaled by
+// 0.80 / 0.882: the circle-to-nebula spacing approved at 288 px is kept, and it is now the same at every size.
+const MINI_NEBULA_FADE_START = 0.68;
+const MINI_NEBULA_FADE_END = 0.89;
 // T2k: the mini nebula alpha is boosted (about 1.4x its previous density); the fade above still reaches 0 at the edge.
 // The nebula is DELIBERATELY subtle in mini: it sits under the 0.9-alpha dark base (drawMiniSceneBase), so only
 // about a tenth of it shows through. This gain is part of the look the maintainer approved on 2026-09-29, not a
