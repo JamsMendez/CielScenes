@@ -799,7 +799,11 @@ function drawGoldenHexadecagon(cx, cy, progress, pulse) {
   const pulseStroke = 1 + pulse * HEXADECAGON_PULSE_STROKE_FACTOR;
   const pulseBlur = HEXADECAGON_PULSE_BLUR_BASE + pulse * HEXADECAGON_PULSE_BLUR_RANGE;
   const vertices = hexadecagonVertices(r, pulse);
-  const chromaticStrokeWidth = r * HEXADECAGON_STROKE_WIDTH_FACTOR * pulseStroke;
+  // Mini is drawn inside the MINI_SCENE_ZOOM transform: B6 raised it from 1.2 to 1.3507 for the ring geometry
+  // only, so the stroke is rescaled by 1.2 / MINI_SCENE_ZOOM to keep its device width where it was drawn at 1.2
+  // (MINI_POLYGON_STROKE_PX in the 288 px CielWin mini, the processing octagon's width).
+  const miniStrokeK = isMiniVariant ? 1.2 / MINI_SCENE_ZOOM : 1;
+  const chromaticStrokeWidth = r * HEXADECAGON_STROKE_WIDTH_FACTOR * pulseStroke * miniStrokeK;
   const chromaticOffsetPx = r * HEXADECAGON_CHROMATIC_OFFSET_FACTOR;
   ctx.save();
   ctx.translate(cx, cy);
