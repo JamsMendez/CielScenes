@@ -91,8 +91,10 @@ function animationProgress(ms) {
 
 var drawReadyAttempted = false;
 function render(ms) {
-  var cx = W * 0.505;
-  var cy = H * 0.515;
+  // T3 (odd/tasks/scene-wallpaper-scaling.md): the mini is centred in its square window like idle/explorer's; the
+  // wallpaper keeps its off-centre composition.
+  var cx = isMiniVariant ? W / 2 : W * 0.505;
+  var cy = isMiniVariant ? H / 2 : H * 0.515;
   var workStart = cadence.begin();
   // Linux port begin (A4): the value the alert overlay's see-through hook needs (CielWin's `p = 0`).
   var alertSceneTime = 0;

@@ -799,10 +799,13 @@ function drawGoldenHexadecagon(cx, cy, progress, pulse) {
   const pulseStroke = 1 + pulse * HEXADECAGON_PULSE_STROKE_FACTOR;
   const pulseBlur = HEXADECAGON_PULSE_BLUR_BASE + pulse * HEXADECAGON_PULSE_BLUR_RANGE;
   const vertices = hexadecagonVertices(r, pulse);
-  // Mini is drawn inside the MINI_SCENE_ZOOM transform: B6 raised it from 1.2 to 1.3507 for the ring geometry
-  // only, so the stroke is rescaled by 1.2 / MINI_SCENE_ZOOM to keep its device width where it was drawn at 1.2
-  // (MINI_POLYGON_STROKE_PX in the 288 px CielWin mini, the processing octagon's width).
-  const miniStrokeK = isMiniVariant ? 1.2 / MINI_SCENE_ZOOM : 1;
+  // Mini is drawn inside the MINI_SCENE_ZOOM transform. The factor keeps the main ring's device width
+  // (r * HEXADECAGON_STROKE_WIDTH_FACTOR * 1.3 * MINI_SCENE_ZOOM * miniStrokeK) at MINI_POLYGON_STROKE_PX in the
+  // 288 px CielWin mini, the processing octagon's width. T3 (odd/tasks/scene-wallpaper-scaling.md): it was
+  // 1.2 / MINI_SCENE_ZOOM for the old margin-based r (40 at 288); the mini r is proportional now (36.29 at 288),
+  // so the factor is solved at 288 (0.9807) and the width scales with the window like the processing octagon's.
+  const miniStrokeK = isMiniVariant
+    ? MINI_POLYGON_STROKE_PX / (coreRadius(288) * HEXADECAGON_STROKE_WIDTH_FACTOR * 1.3 * MINI_SCENE_ZOOM) : 1;
   const chromaticStrokeWidth = r * HEXADECAGON_STROKE_WIDTH_FACTOR * pulseStroke * miniStrokeK;
   const chromaticOffsetPx = r * HEXADECAGON_CHROMATIC_OFFSET_FACTOR;
   ctx.save();

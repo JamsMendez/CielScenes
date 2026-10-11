@@ -22,8 +22,8 @@
 //
 // `g` is already translated so this scene's own (0,0) origin lands at this tile's own position (see
 // the shared module's drawSeeThroughIntersections), and W/H are ALREADY set to sceneW/sceneH by the
-// caller -- cx/cy below use the SAME 0.505/0.515 scene-center fractions js/main.js's render() uses
-// for every other layer (drawGlyphRings included). The shared overlay recolors this drawing to the
+// caller -- cx/cy below use the SAME scene center js/main.js's render() uses for every other layer
+// (drawGlyphRings included): 0.505/0.515 in the wallpaper, the window centre in mini (T3, scene-wallpaper-scaling). The shared overlay recolors this drawing to the
 // alert's own color (blue failed / violet warning) via a 'source-in' composite and clips it to the
 // letters afterward, so this hook only needs to draw an opaque shape -- it fills with plain white,
 // same as processing's/explorer's own hooks already do.
@@ -37,7 +37,7 @@ function sceneAlertTitleLimits(sceneW, sceneH) {
   var reach = isMiniVariant
     ? (r * GLYPH_RING_GOLD_OUTER_FACTOR + GLYPH_RING_DELIMITER_WIDTH / 2) * MINI_SCENE_ZOOM
     : hexadecagonDrawnExtent(r, 1);
-  var cy = sceneH * 0.515;
+  var cy = isMiniVariant ? sceneH / 2 : sceneH * 0.515;
   var margin = Math.max(3, minD * 0.012);
   return { top: cy - reach - margin, bottom: cy + reach + margin };
 }
@@ -52,8 +52,8 @@ var sceneSeeThroughLayerStrokes = sceneSeeThroughLayer;
 sceneSeeThroughLayer = function (g, sceneW, sceneH, progress) {
   var spriteSet = sprites && sprites.outlineGlyphsGold;
   if (!spriteSet || spriteSet.length < 1) return sceneSeeThroughLayerStrokes(g, sceneW, sceneH, progress);
-  var cx = sceneW * 0.505;
-  var cy = sceneH * 0.515;
+  var cx = isMiniVariant ? sceneW / 2 : sceneW * 0.505;
+  var cy = isMiniVariant ? sceneH / 2 : sceneH * 0.515;
   var gold = goldGlyphRingDrawParams(progress);
   var zoom = isMiniVariant ? MINI_SCENE_ZOOM : 1;
   g.save();
@@ -74,8 +74,8 @@ sceneSeeThroughLayer = function (g, sceneW, sceneH, progress) {
 // Linux port end.
 
 function sceneSeeThroughLayer(g, sceneW, sceneH, progress) {
-  var cx = sceneW * 0.505;
-  var cy = sceneH * 0.515;
+  var cx = isMiniVariant ? sceneW / 2 : sceneW * 0.505;
+  var cy = isMiniVariant ? sceneH / 2 : sceneH * 0.515;
   var gold = goldGlyphRingDrawParams(progress);
   // mini-scene-window T2: the mini scene is magnified about its center (main.js), so the letters'
   // see-through ring must be too or it would sit inside the drawn ring instead of on it.

@@ -178,9 +178,11 @@ function outlineGlyphOps(bodyWidth, borderWidth, borderColor, interiorColor) {
 // --- mini-scene-window T2d: mini-only glyph ring metrics (see the MINI_GOLD_* notes in config.js) ------
 // isMiniVariant comes from shared/js/render-loop.js and is resolved at CALL time (this file loads first).
 
-// The composition's scale relative to the 1920x1080 wallpaper the px constants were tuned for (~0.19 at 288px).
+// The composition's scale relative to the 1920x1080 wallpaper the px constants were tuned for (~0.17 at 288px).
+// T3 (scene-wallpaper-scaling): the reference is the wallpaper's own 1080 px core radius in both variants (mini's
+// coreRadius is proportional now, so coreRadius(1080) would no longer be the wallpaper's).
 function glyphRingMiniScale() {
-  return coreRadius(Math.min(W, H)) / coreRadius(1080);
+  return coreRadius(Math.min(W, H)) / wallpaperCoreRadius(1080);
 }
 
 // Wallpaper scaling (odd/tasks/scene-wallpaper-scaling.md T2): the wallpaper scales the 10 px margin and 20 px gap
