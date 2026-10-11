@@ -165,24 +165,35 @@ function drawBrushStroke(context, x0, y0, x1, y1, peakHalfWidth, wobbleAmp, wobb
 // sceneBasis is ~877 there and at any 1440-tall screen), where the constellation ring is ~63px thick. The
 // ?variant=mini window draws the same rings about 6x smaller (ratio ~0.17 at 288px), so the same px made the
 // dots blobs and the glyph strokes dense hatching. In mini each is scaled by (that ring's thickness) / (its
-// thickness in the full scene at that reference screen), never below MINI_CONSTELLATION_MIN_PX. The full
-// variant returns the tunables untouched. These rings are baked into the ring cache (buildRingCaches), so the
-// cache picks the mini sizes up automatically. isMiniVariant comes from shared/js/render-loop.js (resolved
-// at call time).
+// thickness in the full scene at that reference screen), never below MINI_CONSTELLATION_MIN_PX.
+// scene-wallpaper-scaling T5: the full (wallpaper) variant had the same defect in small windows (e.g. 800x450),
+// so it scales too, by min(1, thickness / its thickness at a 1920x1080 screen) with the same floor. Every
+// screen whose basis reaches the 1080p one (any landscape screen with a short side >= 1080) gets ratio 1 and
+// keeps the tunables untouched, byte for byte. These rings are baked into the ring cache (buildRingCaches),
+// so the cache picks the scaled sizes up automatically. isMiniVariant comes from shared/js/render-loop.js
+// (resolved at call time).
 const MINI_CONSTELLATION_REFERENCE_SCREEN = { width: 3440, height: 1440 };
+const WALLPAPER_CONSTELLATION_REFERENCE_SCREEN = { width: 1920, height: 1080 };
 const MINI_CONSTELLATION_MIN_PX = 0.5;
+// Absorbs float noise in (outer - inner) vs (fraction * basis) so the 1080p reference itself stays unscaled.
+const WALLPAPER_DETAIL_RATIO_EPSILON = 1e-9;
 
 // `box` is the ring's thickness in px; `thicknessFraction` is that ring's thickness as a fraction of the basis.
-function miniDetailRatio(box, thicknessFraction) {
-  const referenceBox = thicknessFraction *
-    sceneBasis(MINI_CONSTELLATION_REFERENCE_SCREEN.width, MINI_CONSTELLATION_REFERENCE_SCREEN.height);
+function detailRatio(box, thicknessFraction, referenceScreen) {
+  const referenceBox = thicknessFraction * sceneBasis(referenceScreen.width, referenceScreen.height);
   return box / referenceBox;
 }
 
-// `px` unchanged in the full variant; scaled by the mini ratio (with the floor) in mini.
+// mini: `px` scaled by the 3440x1440 ratio. Wallpaper: `px` scaled by the 1080p ratio when below 1, else
+// returned untouched. Both never below MINI_CONSTELLATION_MIN_PX.
 function miniDetailPx(px, box, thicknessFraction) {
-  if (!isMiniVariant) return px;
-  return Math.max(MINI_CONSTELLATION_MIN_PX, px * miniDetailRatio(box, thicknessFraction));
+  if (isMiniVariant) {
+    return Math.max(MINI_CONSTELLATION_MIN_PX,
+      px * detailRatio(box, thicknessFraction, MINI_CONSTELLATION_REFERENCE_SCREEN));
+  }
+  const ratio = detailRatio(box, thicknessFraction, WALLPAPER_CONSTELLATION_REFERENCE_SCREEN);
+  if (ratio >= 1 - WALLPAPER_DETAIL_RATIO_EPSILON) return px;
+  return Math.max(MINI_CONSTELLATION_MIN_PX, px * ratio);
 }
 
 function constellationDetailSizes(boxSize) {
@@ -257,7 +268,8 @@ function drawConstellationRing(context, cx, cy, innerRadius, outerRadius, rotati
 
 // --- Ring 4: hieroglyph band (two rows of bold small glyphs, enclosed by thin circular lines,
 // with short radial dividers boxing small groups) -------------------------------------------
-// The hieroglyph band's glyph stroke width in px (full: 1.6; mini: scaled with the band, see miniDetailPx above).
+// The hieroglyph band's glyph stroke width in px (1.6 at >= 1080p; scaled with the band below that and in
+// mini, see miniDetailPx above).
 const HIEROGLYPH_STROKE_PX = 1.6;
 
 function drawHieroglyphBand(context, cx, cy, innerRadius, outerRadius, rotation) {
