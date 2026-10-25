@@ -555,8 +555,9 @@ function convexHull(points) {
 // `radius` (the ring's inner ink edge, so neighbours never touch further out) with `letterGapPx` inside a
 // word and `wordSpacePx` between words. As many glyphs as fit at those gaps are taken (the last word cut
 // short if needed), plus `extraLetters` more; then the gaps are justified so the ring closes exactly: the
-// leftover arc widens the word spaces, or, when the extra letters overflow, every gap shrinks by the same
-// factor. Returns each glyph's center angle (radians, from 0); its length is how many glyphs are drawn.
+// leftover arc widens the word spaces, or, when the extra letters overflow, the letter gaps shrink first so
+// the words stay readable; only once the letters touch do the word spaces shrink too. Returns each glyph's
+// center angle (radians, from 0); its length is how many glyphs are drawn.
 function scriptRingLayout(widthsPx, radius, letterGapPx, wordSpacePx, seedBase, extraLetters = 0) {
   const random = mulberry32(seedBase >>> 0);
   const circumference = TAU * radius;
@@ -578,11 +579,14 @@ function scriptRingLayout(widthsPx, radius, letterGapPx, wordSpacePx, seedBase, 
   if (words.length === 0) return [];
 
   const ink = lengthOf(words, 0, 0);
-  const gaps = lengthOf(words, letterGapPx, wordSpacePx) - ink;
-  const slack = circumference - ink - gaps;
-  const shrink = slack >= 0 ? 1 : Math.max(0, (circumference - ink) / gaps);
-  const gap = letterGapPx * shrink;
-  const space = wordSpacePx * shrink + Math.max(0, slack) / words.length;
+  const letterGaps = lengthOf(words, letterGapPx, 0) - ink;
+  const spaces = wordSpacePx * words.length;
+  const slack = circumference - ink - letterGaps - spaces;
+  const letterRoom = circumference - ink - spaces;
+  const gap = slack >= 0 ? letterGapPx : letterGaps > 0 ? letterGapPx * Math.max(0, letterRoom / letterGaps) : 0;
+  const space = slack >= 0
+    ? wordSpacePx + slack / words.length
+    : letterRoom >= 0 ? wordSpacePx : Math.max(0, (circumference - ink) / words.length);
   const angles = [];
   let arc = 0;
   for (const word of words) {

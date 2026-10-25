@@ -450,6 +450,7 @@ const RING_SCRIPT_NIB_THIN_FRACTION = 0.035; // broad nib thickness (sets the ha
 const RING_SCRIPT_NIB_ANGLE = (35 * Math.PI) / 180; // pen angle from the glyph's horizontal, as in textura hands
 const RING_SCRIPT_LETTER_GAP_FRACTION = 0.08; // ink gap between letters of a word, at the ring's inner edge
 const RING_SCRIPT_WORD_SPACE_FRACTION = 0.25; // minimum space between words, before justification
+const RING_SCRIPT_WORD_SPACE_MIN_PX = 4; // floor for the word space, so small rings (the mini) still read as words
 const RING_SCRIPT_EXTRA_LETTERS = 6; // letters added beyond what fits at the gaps above; the gaps tighten to make room
 const RING_SCRIPT_WORD_MIN = 4;
 const RING_SCRIPT_WORD_MAX = 11;
