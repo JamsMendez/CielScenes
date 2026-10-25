@@ -161,7 +161,7 @@ function drawBrushStroke(context, x0, y0, x1, y1, peakHalfWidth, wobbleAmp, wobb
 }
 
 // mini-scene-window T2g/T2h: absolute px sizes (CONSTELLATION_DOT_RADIUS, CONSTELLATION_LINE_WIDTH, and the
-// hieroglyph band's HIEROGLYPH_STROKE_PX) are tuned on the real screen (3440x1440: the maintainer's monitor;
+// hieroglyph band's old stroke width) are tuned on the real screen (3440x1440: the maintainer's monitor;
 // sceneBasis is ~877 there and at any 1440-tall screen), where the constellation ring is ~63px thick. The
 // ?variant=mini window draws the same rings about 6x smaller (ratio ~0.17 at 288px), so the same px made the
 // dots blobs and the glyph strokes dense hatching. In mini each is scaled by (that ring's thickness) / (its
@@ -268,28 +268,22 @@ function drawConstellationRing(context, cx, cy, innerRadius, outerRadius, rotati
 
 // --- Ring 4: hieroglyph band (two rows of bold small glyphs, enclosed by thin circular lines,
 // with short radial dividers boxing small groups) -------------------------------------------
-// The hieroglyph band's glyph stroke width in px (1.6 at >= 1080p; scaled with the band below that and in
-// mini, see miniDetailPx above).
-const HIEROGLYPH_STROKE_PX = 1.6;
-
 function drawHieroglyphBand(context, cx, cy, innerRadius, outerRadius, rotation) {
   const bandThickness = outerRadius - innerRadius;
   // Rows sit evenly inside the band, each with margin to the inner/outer enclosing lines.
   const rowGap = bandThickness / (HIEROGLYPH_BAND_ROW_COUNT + 1);
   const glyphSize = rowGap * 0.72; // bold, small glyphs sized to fill most of their row
-  const glyphStrokePx = miniDetailPx(HIEROGLYPH_STROKE_PX, bandThickness,
-    HIEROGLYPH_BAND_OUTER_RADIUS_FRACTION - HIEROGLYPH_BAND_INNER_RADIUS_FRACTION);
   for (let row = 0; row < HIEROGLYPH_BAND_ROW_COUNT; row++) {
     const radius = innerRadius + rowGap * (row + 1);
-    const pool = glyphTextRun(HIEROGLYPH_GLYPH_COUNT, row * 37);
+    const pool = scriptTextRun(HIEROGLYPH_GLYPH_COUNT, row * 37);
     for (let i = 0; i < HIEROGLYPH_GLYPH_COUNT; i++) {
       const angle = rotation + (i / HIEROGLYPH_GLYPH_COUNT) * TAU;
       const x = cx + Math.cos(angle) * radius;
       const y = cy + Math.sin(angle) * radius;
-      const tangential = angle + Math.PI / 2;
       const brightness = verticalLightBrightness(angle);
       const color = applyBrightness(HIEROGLYPH_GLYPH_COLOR, brightness);
-      drawHieroglyph(context, pool[i], x, y, glyphSize, tangential, color, glyphStrokePx);
+      // Script glyphs are as tall as a hieroglyph's ink box (2 * GLYPH_LOCAL_HALF_EXTENT of glyphSize).
+      drawScriptGlyph(context, pool[i], x, y, glyphSize * 2 * GLYPH_LOCAL_HALF_EXTENT, angle, color);
     }
   }
 
@@ -389,7 +383,7 @@ function drawAlphabetRing(context, cx, cy, innerRadius, outerRadius, rotation) {
 // step around the ring), reusing the hieroglyph stroke generator so each value reads as a
 // distinct, consistent symbol without needing real digits.
 const RULER_MAJOR_TICK_COUNT = Math.ceil(RULER_TICK_COUNT / RULER_LONG_TICK_EVERY);
-const RULER_NUMERAL_POOL = makeHieroglyphPool(RULER_MAJOR_TICK_COUNT, 0x00c0ffee);
+const RULER_NUMERAL_POOL = Array.from({ length: RULER_MAJOR_TICK_COUNT }, (_, i) => makeScriptGlyph(i, 0x00c0ffee));
 
 function drawRulerRing(context, cx, cy, radius, rotation) {
   const basis = sceneBasis(W, H);
@@ -422,9 +416,8 @@ function drawRulerRing(context, cx, cy, radius, rotation) {
       const labelRadius = radius + length + labelGap;
       const lx = cx + Math.cos(angle) * labelRadius;
       const ly = cy + Math.sin(angle) * labelRadius;
-      const tangential = angle + Math.PI / 2;
       const numeral = RULER_NUMERAL_POOL[(i / RULER_LONG_TICK_EVERY) % RULER_NUMERAL_POOL.length];
-      drawHieroglyph(context, numeral, lx, ly, labelSize, tangential, labelColor, 2.2);
+      drawScriptGlyph(context, numeral, lx, ly, labelSize * 2 * GLYPH_LOCAL_HALF_EXTENT, angle, labelColor);
     }
   }
 }
@@ -438,15 +431,14 @@ function drawParagraphRing(context, cx, cy, innerRadius, rotation) {
   const glyphSize = rowGap * PARAGRAPH_GLYPH_SIZE_FRACTION_OF_ROW_GAP;
   for (let row = 0; row < PARAGRAPH_RING_ROW_COUNT; row++) {
     const radius = innerRadius + row * rowGap;
-    const pool = glyphTextRun(PARAGRAPH_GLYPH_COUNT, row * 71 + 5);
+    const pool = scriptTextRun(PARAGRAPH_GLYPH_COUNT, row * 71 + 5);
     for (let i = 0; i < PARAGRAPH_GLYPH_COUNT; i++) {
       const angle = rotation + (i / PARAGRAPH_GLYPH_COUNT) * TAU;
       const x = cx + Math.cos(angle) * radius;
       const y = cy + Math.sin(angle) * radius;
-      const tangential = angle + Math.PI / 2;
       const brightness = verticalLightBrightness(angle);
       const color = applyBrightness(PARAGRAPH_GLYPH_COLOR, brightness);
-      drawHieroglyph(context, pool[i], x, y, glyphSize, tangential, color, 1);
+      drawScriptGlyph(context, pool[i], x, y, glyphSize * 2 * GLYPH_LOCAL_HALF_EXTENT, angle, color);
     }
   }
 
@@ -486,7 +478,7 @@ function drawOuterGlyphRing(context, cx, cy, innerRadius, rotation) {
   // inside the band with margin (see config.js OUTER_GLYPH_SIZE_FRACTION_OF_THICKNESS) — this
   // replaces the old thickness*0.85 constant, which overflowed the band by ~22% radially.
   const glyphSize = thickness * OUTER_GLYPH_SIZE_FRACTION_OF_THICKNESS;
-  const pool = glyphTextRun(OUTER_GLYPH_COUNT, 17);
+  const pool = scriptTextRun(OUTER_GLYPH_COUNT, 17);
 
   for (let i = 0; i < OUTER_GLYPH_COUNT; i++) {
     const angle = rotation + (i / OUTER_GLYPH_COUNT) * TAU;
@@ -494,15 +486,8 @@ function drawOuterGlyphRing(context, cx, cy, innerRadius, rotation) {
     if (brightness <= 0.001) continue;
     const x = cx + Math.cos(angle) * radius;
     const y = cy + Math.sin(angle) * radius;
-    const tangential = angle + Math.PI / 2;
     const color = applyBrightness(OUTER_GLYPH_COLOR, brightness);
-
-    context.save();
-    context.translate(x, y);
-    context.rotate(tangential);
-    context.scale(glyphSize, glyphSize * OUTER_GLYPH_RADIAL_STRETCH);
-    drawStrokesOnly(context, pool[i], 0, 0, color);
-    context.restore();
+    drawScriptGlyph(context, pool[i], x, y, glyphSize * 2 * GLYPH_LOCAL_HALF_EXTENT, angle, color, OUTER_GLYPH_RADIAL_STRETCH);
   }
 
   // Thin circular boundary lines enclosing the band, same brightness-shaded-segment technique as
