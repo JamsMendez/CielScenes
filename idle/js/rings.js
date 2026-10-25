@@ -77,7 +77,7 @@ const CONSTELLATION_FIGURES = [
 ];
 
 // Each figure's stars are normalized here (once, at module load) so its actual bounding box is
-// centered at the origin and scaled to fill exactly CONSTELLATION_FIGURE_MARGIN of a unit box —
+// centered at the origin and scaled to fill CONSTELLATION_FIGURE_MARGIN of a unit box (the full margin in height) —
 // guaranteeing that once it is placed at the ring's mid-radius and scaled by the ring's own
 // thickness, it can never cross either boundary, including at the left/right sides where earlier
 // passes let it touch the neighboring band.
@@ -94,8 +94,12 @@ function makeConstellations(count, seedBase) {
     const boxCenterX = (minX + maxX) / 2;
     const boxCenterY = (minY + maxY) / 2;
     const boxSpan = Math.max(maxX - minX, maxY - minY, 1e-6); // avoid divide-by-zero for degenerate figures
-    const scale = CONSTELLATION_FIGURE_MARGIN / boxSpan;
-    const points = rawPoints.map(([x, y]) => [(x - boxCenterX) * scale, (y - boxCenterY) * scale]);
+    // Width keeps the uniform fit (so no figure grows toward its neighbours); height (local y, the ring's radial
+    // direction) is fitted on its own, so a flat figure such as Cassiopeia's W is stretched to span the ring's
+    // thickness like the tall ones: every figure ends up exactly CONSTELLATION_FIGURE_MARGIN tall.
+    const scaleX = CONSTELLATION_FIGURE_MARGIN / boxSpan;
+    const scaleY = CONSTELLATION_FIGURE_MARGIN / Math.max(maxY - minY, 1e-6);
+    const points = rawPoints.map(([x, y]) => [(x - boxCenterX) * scaleX, (y - boxCenterY) * scaleY]);
 
     // IDL-16: per-edge hand-drawn "brush" stroke parameters, drawn from the figure's own seeded
     // RNG stream, so the brush look stays deterministic from one seed with no live Math.random anywhere. One entry per figure edge —
