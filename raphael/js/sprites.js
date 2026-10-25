@@ -218,7 +218,8 @@ function buildScriptRingSprites(annulus, borderColor, interiorColor, seed) {
   const maxGlyphs = Math.ceil((TAU * radius) / (2 * reach.x + letterGap));
   const glyphs = Array.from({ length: maxGlyphs }, (_, i) => makeScriptGlyph(i, seed));
   const widths = glyphs.map((glyph) => glyph.width * scale + 2 * reach.x);
-  const angles = scriptRingLayout(widths, radius, letterGap, targetHeight * RING_SCRIPT_WORD_SPACE_FRACTION, seed, RING_SCRIPT_EXTRA_LETTERS);
+  const angles = scriptRingLayout(widths, radius, letterGap,
+    Math.max(targetHeight * RING_SCRIPT_WORD_SPACE_FRACTION, RING_SCRIPT_WORD_SPACE_MIN_PX), seed, RING_SCRIPT_EXTRA_LETTERS);
   return angles.map((ringAngle, i) => {
     const strokes = transformStrokesForRing(glyphs[i].strokes, scale, scale);
     const sprite = bakeSprite(widths[i] / 2, targetHeight / 2, (g, k) => {
