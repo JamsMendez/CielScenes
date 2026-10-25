@@ -2,17 +2,16 @@
 // (reference-only, excluded from git -- see the feature doc, "Source material"). Not restyled:
 // only this header comment was added, the source's own header/body follow unchanged.
 
-// digits.js — procedural stroke "digit" glyphs (0-9 plus one separator) in glyphs.js's hieroglyph
+// digits.js — procedural "digit" glyphs (0-9 plus one separator) in glyphs.js's script-ring
 // style, for the two persistent glyph-style edge counters (Raphael). Loads after config.js,
-// math.js, and glyphs.js (reuses makeHieroglyph/strokesBounds); touches no DOM/ctx.
+// math.js, and glyphs.js (reuses makeScriptGlyph/scriptDiamond); touches no DOM/ctx.
 
-// Each digit reuses makeHieroglyph exactly as any other pooled glyph does (glyphs.js's
-// GLYPH_TEXT_POOL), just with its own seed base (DIGIT_GLYPH_SEED, config.js) so this pool is
-// independent of — and never shifts — the glyph-ring pool's indices.
-const DIGIT_GLYPHS = Array.from({ length: 10 }, (_, digit) => makeHieroglyph(digit, DIGIT_GLYPH_SEED));
-// Index 10 in the same seeded stream: distinct from every digit by construction (mulberry32 is
-// reseeded per index), never drawn as a digit itself.
-const DIGIT_SEPARATOR_GLYPH = makeHieroglyph(10, DIGIT_GLYPH_SEED);
+// Each digit is one of glyphs.js's invented-blackletter script glyphs (makeScriptGlyph), the same hand as
+// the gold and blue rings, with its own seed base (DIGIT_GLYPH_SEED, config.js) so the ten digits are
+// fixed and independent of the rings' text.
+const DIGIT_GLYPHS = Array.from({ length: 10 }, (_, digit) => makeScriptGlyph(digit, DIGIT_GLYPH_SEED));
+// The separator is two lozenge dots along the column, so it never reads as an eleventh digit.
+const DIGIT_SEPARATOR_GLYPH = { strokes: [scriptDiamond(-0.14, 0), scriptDiamond(0.14, 0)], width: 0.28 };
 
 // Formats `counter` (matching the failure overlay's 0..99, wrapping bit counter) as a "00:NN"
 // style readout: two leading zero digits, a separator, then the tens and ones digits of

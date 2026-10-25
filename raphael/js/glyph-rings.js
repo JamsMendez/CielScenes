@@ -166,6 +166,13 @@ function glyphRingOrientationAngle(ringAngle) {
   return ringAngle - Math.PI / 2;
 }
 
+// Sprite i's angle around its ring, before rotation: its own `ringAngle` when the ring has a laid-out text
+// (the gold and blue script rings, js/sprites.js's buildScriptRingSprites), else even spacing.
+function glyphRingSpriteAngle(spriteSet, i) {
+  const ringAngle = spriteSet[i].ringAngle;
+  return ringAngle !== undefined ? ringAngle : (i / spriteSet.length) * TAU;
+}
+
 function outlineGlyphOps(bodyWidth, borderWidth, borderColor, interiorColor) {
   const interiorWidth = Math.max(0.4, bodyWidth - 2 * borderWidth);
   return [
