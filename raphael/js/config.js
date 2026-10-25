@@ -442,6 +442,20 @@ const GLYPH_RING_GAP_PX = 20;
 const GLYPH_RING_GOLD_SLIM_SIZE_FRACTION = 0.2;
 const GLYPH_RING_GOLD_COUNT_FACTOR = 3;
 const GLYPH_RING_GOLD_MIN_GAP_FRACTION = 0.3;
+// Gold and blue script rings (reference: GOODS-04163090.jpg): condensed letter-like glyphs built on radial stems, with
+// proportional widths, grouped into words. Every value below is a fraction of the glyph height (the ring thickness
+// minus its edge margins). Words are justified so the ring closes exactly: only the word spaces stretch.
+const RING_SCRIPT_NIB_FRACTION = 0.2; // broad nib length (sets the stem width)
+const RING_SCRIPT_NIB_THIN_FRACTION = 0.035; // broad nib thickness (sets the hairline width)
+const RING_SCRIPT_NIB_ANGLE = (35 * Math.PI) / 180; // pen angle from the glyph's horizontal, as in textura hands
+const RING_SCRIPT_LETTER_GAP_FRACTION = 0.08; // ink gap between letters of a word, at the ring's inner edge
+const RING_SCRIPT_WORD_SPACE_FRACTION = 0.25; // minimum space between words, before justification
+const RING_SCRIPT_EXTRA_LETTERS = 6; // letters added beyond what fits at the gaps above; the gaps tighten to make room
+const RING_SCRIPT_WORD_MIN = 4;
+const RING_SCRIPT_WORD_MAX = 11;
+const RING_SCRIPT_EDGE_MARGIN_FACTOR = 0.5; // of the ring's edge margin: the letters nearly touch both lines
+const RING_SCRIPT_GOLD_SEED = 0x60d5c41f;
+const RING_SCRIPT_BLUE_SEED = 0x2b1e9a73;
 // RAP-35 (user feedback, blue ring only): "agrégale 10 caracteres más (del catálogo existente) ...
 // quiero ver si se ve más lleno el anillo aprovechando el espacio entre caracteres que sobra."
 // Extra glyphs beyond the blue ring's derived count, drawn from the same RING_GLYPH_POOL; the gap
@@ -503,7 +517,7 @@ const GLYPH_RING_BLUE_ROTATION_SPEED = -0.32;
 // Two persistent vertical counters on the left/right edges, laid out like the Ctrl+E/Ctrl+A error
 // layer's bit-counter modules (js/failure-overlay.js's drawFailureModules) but always visible (no
 // overlay), and rendered with procedural stroke "digit" glyphs (js/digits.js) instead of a
-// monospace font, so they read as the same script as the glyph rings.
+// monospace font, so they read as the same script as the glyph rings (the invented blackletter).
 const DIGIT_GLYPH_SEED = 0x7c3a9e21;
 const GLYPH_COUNTER_STEP_MS = 100; // first group's tick cadence
 // RAP-11 (user feedback): "¿dónde están los contadores? ... también agrégale el background." The
@@ -515,7 +529,6 @@ const GLYPH_COUNTER_STEP_MS_B = 137;
 // Digits per group; two groups + one separator = GLYPH_COUNTER_GROUP_DIGIT_COUNT*2+1 characters
 // per panel (15 with the default 7 -> inside the reference's observed 14-16 range).
 const GLYPH_COUNTER_GROUP_DIGIT_COUNT = 7;
-const GLYPH_COUNTER_LINE_WIDTH = 2.6; // bold, thick strokes per the reference
 // Pale cream/off-white (~#f4ecd8), not gold, per the reference.
 const GLYPH_COUNTER_GLYPH_COLOR = '244,236,216';
 // Subtle chromatic fringe either side of the main cream glyph (faint red / faint cyan-gold), like

@@ -162,7 +162,7 @@ function transformStrokesForRing(strokes, scaleX, scaleY) {
   const out = [];
   for (const stroke of strokes) {
     if (stroke.type === 'line') {
-      out.push({ type: 'line', points: stroke.points.map(([x, y]) => [x * scaleX, y * scaleY]) });
+      out.push({ type: 'line', points: stroke.points.map(([x, y]) => [x * scaleX, y * scaleY]), weight: stroke.weight });
     } else if (stroke.type === 'curve') {
       const points = [];
       for (let i = 0; i <= GLYPH_RING_CURVE_SAMPLE_SEGMENTS; i++) {
@@ -349,6 +349,252 @@ function makeRingHieroglyph(slot, seedBase) {
 // literal, not a forward-reference to GLYPH_TEXT_POOL_SIZE, which is declared later in this file).
 const RING_GLYPH_POOL_SIZE = 96;
 const RING_GLYPH_POOL = Array.from({ length: RING_GLYPH_POOL_SIZE }, (_, i) => makeRingHieroglyph(i, 0x5ee1e967));
+
+// Gold script ring (references: GOODS-04163090.jpg for the layout, alfabeto.jpg for the hand): an
+// invented blackletter. Glyphs are composed, not copied from any alphabet: 1-3 stems along the radius
+// with lozenge heads and feet, joined by broken arches, cups, bars or hairlines, plus an occasional
+// angular bowl, flag or lozenge dot. Coordinates sit in a unit box with y in [-0.5, 0.5] (local Y is
+// the ring's radial direction); x is as wide as the glyph needs, so widths are proportional. Each
+// stroke is a 'line' skeleton later drawn with a broad nib (drawNibGlyph), whose fixed angle gives
+// the thick stems and thin diagonals of the reference; `weight` scales the nib for lighter strokes.
+const RING_SCRIPT_STEM_PITCH = 0.3;
+const RING_SCRIPT_FLICK = 0.07; // lozenge head/foot length
+// Unit direction perpendicular to the nib (down-right in glyph space): a stroke along it is full width.
+const RING_SCRIPT_BROAD_DIR = [Math.sin(RING_SCRIPT_NIB_ANGLE), -Math.cos(RING_SCRIPT_NIB_ANGLE)];
+
+function scriptLine(points, weight = 1) {
+  return { type: 'line', points, weight };
+}
+
+// A stem from `top` down to `bottom` at `x`, entering and leaving with a short broad flick so both ends
+// read as lozenges, the textura signature.
+function scriptStem(x, top, bottom) {
+  const [dx, dy] = RING_SCRIPT_BROAD_DIR;
+  const f = RING_SCRIPT_FLICK;
+  return scriptLine([[x - dx * f, top], [x, top + dy * f], [x, bottom - dy * f], [x + dx * f, bottom]]);
+}
+
+// A lozenge mark: one short stroke along the broad direction.
+function scriptDiamond(x, y) {
+  const [dx, dy] = RING_SCRIPT_BROAD_DIR;
+  const h = RING_SCRIPT_FLICK * 0.6;
+  return scriptLine([[x - dx * h, y - dy * h], [x + dx * h, y + dy * h]]);
+}
+
+// An angular bowl: an ellipse sampled every 60 degrees from 30 degrees, so its sides are straight and
+// its top and bottom are pointed, like a broken textura 'o'. `from`/`to` pick a run of those corners.
+function scriptBowl(cx, cy, rx, ry, from = 0, to = 6, weight = 0.9) {
+  const points = [];
+  for (let i = from; i <= to; i++) {
+    const t = Math.PI / 6 + (i * Math.PI) / 3;
+    points.push([cx + Math.cos(t) * rx, cy + Math.sin(t) * ry]);
+  }
+  return scriptLine(points, weight);
+}
+
+const RING_SCRIPT_STEM_SPANS = [
+  [0.5, -0.5], [0.5, -0.5], [0.5, -0.5], // full height (the most common)
+  [0.2, -0.5], [0.2, -0.5], // x-height
+  [0.5, -0.2], // ascender only
+];
+
+function pickFrom(random, list) {
+  return list[Math.floor(random() * list.length)];
+}
+
+// Joins stem a to stem b (each { x, top, bottom }) with one of the textura connectors, or nothing.
+function scriptConnector(random, a, b) {
+  const roll = random();
+  const mid = (a.x + b.x) / 2;
+  if (roll < 0.3) {
+    // broken arch over the shorter top
+    const top = Math.min(a.top, b.top);
+    return [scriptLine([[a.x, top - 0.12], [mid, top], [b.x, top - 0.12]], 0.85)];
+  }
+  if (roll < 0.5) {
+    // broken cup under the higher bottom
+    const bottom = Math.max(a.bottom, b.bottom);
+    return [scriptLine([[a.x, bottom + 0.12], [mid, bottom], [b.x, bottom + 0.12]], 0.85)];
+  }
+  if (roll < 0.65) {
+    const y = (random() - 0.5) * 0.3;
+    return [scriptLine([[a.x, y], [b.x, y]], 0.8)];
+  }
+  if (roll < 0.8) {
+    // hairline diagonal, top of one stem to the bottom of the other
+    return [scriptLine([[a.x, Math.min(a.top, 0.35)], [b.x, Math.max(b.bottom, -0.35)]], 0.35)];
+  }
+  return [];
+}
+
+// One deterministic invented-blackletter glyph, centered on x = 0. Returns its skeleton strokes and its
+// skeleton width in unit-box units (the nib's own reach is added by the caller).
+function makeScriptGlyph(index, seedBase) {
+  const random = mulberry32((seedBase + index * 0x9e3779b9) >>> 0);
+  let strokes = [];
+  const shape = random();
+  if (shape < 0.08) {
+    // a lone angular bowl, sometimes with a stem through it
+    strokes.push(scriptBowl(0, 0, 0.17, 0.5));
+    if (random() < 0.5) strokes.push(scriptLine([[0, 0.3], [0, -0.3]], 0.5));
+  } else {
+    const stemCount = shape < 0.38 ? 1 : shape < 0.8 ? 2 : 3;
+    const pitch = RING_SCRIPT_STEM_PITCH * (0.85 + random() * 0.3);
+    const stems = Array.from({ length: stemCount }, (_, i) => {
+      const [top, bottom] = pickFrom(random, RING_SCRIPT_STEM_SPANS);
+      return { x: i * pitch, top, bottom };
+    });
+    for (const stem of stems) strokes.push(scriptStem(stem.x, stem.top, stem.bottom));
+    for (let i = 1; i < stems.length; i++) strokes.push(...scriptConnector(random, stems[i - 1], stems[i]));
+    const first = stems[0];
+    const last = stems[stems.length - 1];
+    // Single stems always get an ornament, wider glyphs sometimes do.
+    const ornaments = stemCount === 1 ? 1 + Math.floor(random() * 2) : Math.floor(random() * 2);
+    for (let i = 0; i < ornaments; i++) {
+      const kind = random();
+      const upper = random() < 0.5;
+      if (kind < 0.35) {
+        // half bowl on the outer side of the first or last stem
+        const left = random() < 0.5;
+        const stem = left ? first : last;
+        const side = left ? -1 : 1;
+        const cy = upper ? 0.25 : -0.25;
+        strokes.push(scriptBowl(stem.x + side * pitch * 0.5, cy, pitch * 0.5, 0.25, left ? 1 : 4, left ? 4 : 7));
+      } else if (kind < 0.6) {
+        // flag from the last stem
+        const y = upper ? Math.min(last.top, 0.35) : 0;
+        strokes.push(scriptLine([[last.x, y], [last.x + pitch * 0.55, y + 0.08], [last.x + pitch * 0.7, y - 0.05]], 0.8));
+      } else if (kind < 0.8) {
+        // lozenge dot in the space a short stem leaves
+        const short = stems.find((stem) => stem.top < 0.5 || stem.bottom > -0.5) || first;
+        strokes.push(short.top < 0.5 ? scriptDiamond(short.x, 0.4) : scriptDiamond(short.x, -0.4));
+      } else {
+        // hairline tail off the foot of the last stem
+        strokes.push(scriptLine([[last.x, last.bottom + 0.05], [last.x - pitch * 0.6, last.bottom + 0.2]], 0.35));
+      }
+    }
+  }
+  const xs = strokes.flatMap((stroke) => stroke.points.map(([x]) => x));
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const dx = (minX + maxX) / 2;
+  strokes = strokes.map((stroke) => ({ ...stroke, points: stroke.points.map(([x, y]) => [x - dx, y]) }));
+  return { strokes, width: maxX - minX };
+}
+
+// How far a broad nib `length` long and `thickness` wide, held at RING_SCRIPT_NIB_ANGLE, reaches past
+// a skeleton point on each axis (half its bounding box).
+function nibReach(length, thickness) {
+  const c = Math.abs(Math.cos(RING_SCRIPT_NIB_ANGLE));
+  const s = Math.abs(Math.sin(RING_SCRIPT_NIB_ANGLE));
+  return { x: (length * c + thickness * s) / 2, y: (length * s + thickness * c) / 2 };
+}
+
+// The broad-nib outline of real-px skeleton strokes (already scaled), as polygons: every segment is the convex
+// hull of the nib rectangle at both its ends, so a stroke's width follows its direction. The nib is
+// `length` x `thickness` px; a stroke's `weight` scales its length (lighter strokes), never below the
+// thickness. Polygons are in the glyph's own frame with X mirrored: glyphRingOrientationAngle sends +y (the
+// glyph's top) outward and +x clockwise, which would otherwise show the glyphs as a mirror-written hand.
+// Plain point arrays (no Path2D), so they can be cached and filled on any 2D context.
+function nibGlyphPolygons(strokes, length, thickness) {
+  const c = Math.cos(RING_SCRIPT_NIB_ANGLE);
+  const s = Math.sin(RING_SCRIPT_NIB_ANGLE);
+  const polygons = [];
+  for (const stroke of strokes) {
+    const half = Math.max(length * (stroke.weight ?? 1), thickness) / 2;
+    const t = thickness / 2;
+    const corners = [[-half, -t], [half, -t], [half, t], [-half, t]].map(([u, v]) => [u * c - v * s, u * s + v * c]);
+    for (let i = 1; i < stroke.points.length; i++) {
+      const [x0, y0] = stroke.points[i - 1];
+      const [x1, y1] = stroke.points[i];
+      const hull = convexHull([
+        ...corners.map(([u, v]) => [x0 + u, y0 + v]),
+        ...corners.map(([u, v]) => [x1 + u, y1 + v]),
+      ]);
+      polygons.push(hull.map(([x, y]) => [-x, y]));
+    }
+  }
+  return polygons;
+}
+
+// Fills nibGlyphPolygons' polygons as one path (nonzero, so overlapping segments merge).
+function fillNibPolygons(context, polygons, color) {
+  context.fillStyle = color;
+  context.beginPath();
+  for (const polygon of polygons) {
+    context.moveTo(polygon[0][0], polygon[0][1]);
+    for (let j = 1; j < polygon.length; j++) context.lineTo(polygon[j][0], polygon[j][1]);
+    context.closePath();
+  }
+  context.fill();
+}
+
+function drawNibGlyph(context, strokes, length, thickness, color) {
+  fillNibPolygons(context, nibGlyphPolygons(strokes, length, thickness), color);
+}
+
+// Andrew's monotone chain; returns the hull counter-clockwise (in y-up coordinates).
+function convexHull(points) {
+  const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower = [];
+  for (const p of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const p = sorted[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+// Lays a script ring out as justified words: glyph `widthsPx` (ink widths, stroke included) are packed at
+// `radius` (the ring's inner ink edge, so neighbours never touch further out) with `letterGapPx` inside a
+// word and `wordSpacePx` between words. As many glyphs as fit at those gaps are taken (the last word cut
+// short if needed), plus `extraLetters` more; then the gaps are justified so the ring closes exactly: the
+// leftover arc widens the word spaces, or, when the extra letters overflow, every gap shrinks by the same
+// factor. Returns each glyph's center angle (radians, from 0); its length is how many glyphs are drawn.
+function scriptRingLayout(widthsPx, radius, letterGapPx, wordSpacePx, seedBase, extraLetters = 0) {
+  const random = mulberry32(seedBase >>> 0);
+  const circumference = TAU * radius;
+  const spans = [];
+  for (let total = 0; total < widthsPx.length; total += spans[spans.length - 1]) {
+    spans.push(RING_SCRIPT_WORD_MIN + Math.floor(random() * (RING_SCRIPT_WORD_MAX - RING_SCRIPT_WORD_MIN + 1)));
+  }
+  const wordsOf = (count) => {
+    const words = [];
+    for (let i = 0, start = 0; start < count; start += spans[i], i++) words.push(widthsPx.slice(start, Math.min(start + spans[i], count)));
+    return words;
+  };
+  const lengthOf = (words, gap, space) =>
+    words.reduce((sum, word) => sum + word.reduce((a, w) => a + w, 0) + gap * (word.length - 1) + space, 0);
+
+  let fitting = 0;
+  while (fitting < widthsPx.length && lengthOf(wordsOf(fitting + 1), letterGapPx, wordSpacePx) <= circumference) fitting++;
+  const words = wordsOf(Math.min(widthsPx.length, fitting + extraLetters));
+  if (words.length === 0) return [];
+
+  const ink = lengthOf(words, 0, 0);
+  const gaps = lengthOf(words, letterGapPx, wordSpacePx) - ink;
+  const slack = circumference - ink - gaps;
+  const shrink = slack >= 0 ? 1 : Math.max(0, (circumference - ink) / gaps);
+  const gap = letterGapPx * shrink;
+  const space = wordSpacePx * shrink + Math.max(0, slack) / words.length;
+  const angles = [];
+  let arc = 0;
+  for (const word of words) {
+    word.forEach((w, i) => {
+      if (i > 0) arc += gap;
+      angles.push((arc + w / 2) / radius);
+      arc += w;
+    });
+    arc += space;
+  }
+  return angles;
+}
 
 // Draws `count` glyphs evenly spaced around a circle of `radius` centered at (cx, cy), each
 // glyph sized `glyphSize` and oriented tangentially (rotated to follow the circle), starting at

@@ -165,6 +165,8 @@ function paintTransformedOutlineGlyph(g, k, strokes, bodyWidth, borderWidth, bor
 // then baked once and cached — no per-frame path building or scaling. `extraCount` (RAP-35, blue
 // only) adds glyphs beyond the ring's derived count; see glyphRingCountWithExtra.
 function buildOutlineRingSprites(annulus, baseSizeFraction, strokeWidthFraction, borderColor, interiorColor, extraCount = 0) {
+  if (annulus.name === 'gold') return buildScriptRingSprites(annulus, borderColor, interiorColor, RING_SCRIPT_GOLD_SEED);
+  if (annulus.name === 'blue') return buildScriptRingSprites(annulus, borderColor, interiorColor, RING_SCRIPT_BLUE_SEED);
   const thickness = annulus.outerRadius - annulus.innerRadius;
   const targetWidth = thickness * baseSizeFraction;
   const targetHeight = thickness - 2 * glyphRingEdgeMarginPx();
@@ -195,6 +197,40 @@ function buildOutlineRingSprites(annulus, baseSizeFraction, strokeWidthFraction,
     return bakeSprite(extent.halfWidth, extent.halfHeight,
       (g, k) => paintTransformedOutlineGlyph(g, k, transformed, bodyWidth, borderWidth, borderColor, interiorColor, dotRadiusPx),
       RING_SPRITE_MAX_DIM);
+  });
+}
+
+// The gold and blue rings' script sprites (glyphs.js's makeScriptGlyph/scriptRingLayout/drawNibGlyph): every glyph is
+// as tall as the ring allows and as wide as its own skeleton, uniformly scaled, inked with the broad nib in
+// the ring's outline style (opaque gold rim, translucent interior: the nib eroded by the rim width), and
+// carries its `ringAngle` from the justified word layout, which every gold-ring draw path reads through
+// glyphRingSpriteAngle.
+function buildScriptRingSprites(annulus, borderColor, interiorColor, seed) {
+  const margin = glyphRingEdgeMarginPx() * RING_SCRIPT_EDGE_MARGIN_FACTOR;
+  const targetHeight = annulus.outerRadius - annulus.innerRadius - 2 * margin;
+  const nibLength = targetHeight * RING_SCRIPT_NIB_FRACTION;
+  const nibThickness = Math.max(targetHeight * RING_SCRIPT_NIB_THIN_FRACTION, GLYPH_RING_BORDER_WIDTH_FLOOR_PX);
+  const rim = Math.max(nibLength * Math.cos(RING_SCRIPT_NIB_ANGLE) * GLYPH_RING_BORDER_FRACTION, GLYPH_RING_BORDER_WIDTH_FLOOR_PX);
+  const reach = nibReach(nibLength, nibThickness);
+  const scale = targetHeight - 2 * reach.y;
+  const radius = annulus.innerRadius + margin;
+  const letterGap = targetHeight * RING_SCRIPT_LETTER_GAP_FRACTION;
+  const maxGlyphs = Math.ceil((TAU * radius) / (2 * reach.x + letterGap));
+  const glyphs = Array.from({ length: maxGlyphs }, (_, i) => makeScriptGlyph(i, seed));
+  const widths = glyphs.map((glyph) => glyph.width * scale + 2 * reach.x);
+  const angles = scriptRingLayout(widths, radius, letterGap, targetHeight * RING_SCRIPT_WORD_SPACE_FRACTION, seed, RING_SCRIPT_EXTRA_LETTERS);
+  return angles.map((ringAngle, i) => {
+    const strokes = transformStrokesForRing(glyphs[i].strokes, scale, scale);
+    const sprite = bakeSprite(widths[i] / 2, targetHeight / 2, (g, k) => {
+      g.scale(k, k);
+      drawNibGlyph(g, strokes, nibLength, nibThickness, borderColor);
+      g.globalCompositeOperation = 'destination-out';
+      drawNibGlyph(g, strokes, nibLength - 2 * rim, Math.max(0, nibThickness - 2 * rim), 'rgba(0,0,0,1)');
+      g.globalCompositeOperation = 'source-over';
+      drawNibGlyph(g, strokes, nibLength - 2 * rim, Math.max(0, nibThickness - 2 * rim), interiorColor);
+    }, RING_SPRITE_MAX_DIM);
+    sprite.ringAngle = ringAngle;
+    return sprite;
   });
 }
 

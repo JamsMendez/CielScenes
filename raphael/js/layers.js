@@ -507,7 +507,7 @@ function drawMiniBakedGlyphRing(bake, cx, cy, radius, spriteSet, rotation) {
     // The reference drawOutlineGlyphRing/stampSprite ops at centre (0, 0) and rotation 0.
     const count = spriteSet.length;
     for (let i = 0; i < count; i++) {
-      const angle = (i / count) * TAU;
+      const angle = glyphRingSpriteAngle(spriteSet, i);
       const sprite = spriteSet[i];
       const w = sprite.hw * 2;
       const h = sprite.hh * 2;
@@ -593,7 +593,7 @@ function drawGlyphRings(cx, cy, progress) {
 // angular layout glyphs.js's drawGlyphRing uses (even spacing, tangential orientation).
 function drawOutlineGlyphRing(cx, cy, radius, count, spriteSet, rotation) {
   for (let i = 0; i < count; i++) {
-    const angle = rotation + (i / count) * TAU;
+    const angle = rotation + glyphRingSpriteAngle(spriteSet, i);
     const x = cx + Math.cos(angle) * radius;
     const y = cy + Math.sin(angle) * radius;
     ctx.save();
@@ -1220,21 +1220,43 @@ function drawGlyphCounterPanel(rect) {
   ctx.restore();
 }
 
+// The counter glyphs as broad-nib polygons (glyphs.js's nibGlyphPolygons, the script rings' hand), `glyphSize` tall
+// across the panel; rebuilt only when the size changes (on resize), never per frame.
+const glyphCounterPathCache = { size: NaN, digits: null, separator: null };
+
+function glyphCounterPaths(glyphSize) {
+  const cache = glyphCounterPathCache;
+  if (cache.size !== glyphSize) {
+    const nibLength = glyphSize * RING_SCRIPT_NIB_FRACTION;
+    const nibThickness = Math.max(glyphSize * RING_SCRIPT_NIB_THIN_FRACTION, 1);
+    const scale = glyphSize - 2 * nibReach(nibLength, nibThickness).y;
+    const path = (glyph) => nibGlyphPolygons(transformStrokesForRing(glyph.strokes, scale, scale), nibLength, nibThickness);
+    cache.size = glyphSize;
+    cache.digits = DIGIT_GLYPHS.map(path);
+    cache.separator = path(DIGIT_SEPARATOR_GLYPH);
+  }
+  return cache;
+}
+
 // Three passes (faint red, faint cyan, the main cream glyph) at a 1px-ish horizontal offset, same
 // pattern as drawGoldenHexadecagon's chromatic offset copies, for the reference's subtle fringe.
 function drawGlyphCounterColumn(rect, side, digits, glyphSize) {
   const columnX = rect.x + rect.width / 2;
   const spacing = rect.height / (digits.length + 1);
   const rotation = side === 'left' ? -Math.PI / 2 : Math.PI / 2;
+  const paths = glyphCounterPaths(glyphSize);
   for (const [offsetX, color] of [
     [-GLYPH_COUNTER_CHROMATIC_OFFSET, GLYPH_COUNTER_CHROMATIC_RED],
     [GLYPH_COUNTER_CHROMATIC_OFFSET, GLYPH_COUNTER_CHROMATIC_CYAN],
     [0, `rgba(${GLYPH_COUNTER_GLYPH_COLOR},0.96)`],
   ]) {
     digits.forEach((entry, index) => {
-      const strokes = entry === 'separator' ? DIGIT_SEPARATOR_GLYPH : DIGIT_GLYPHS[entry];
-      const y = rect.y + spacing * (index + 1);
-      drawHieroglyph(ctx, strokes, columnX + offsetX, y, glyphSize, rotation, color, GLYPH_COUNTER_LINE_WIDTH);
+      const path = entry === 'separator' ? paths.separator : paths.digits[entry];
+      ctx.save();
+      ctx.translate(columnX + offsetX, rect.y + spacing * (index + 1));
+      ctx.rotate(rotation);
+      fillNibPolygons(ctx, path, color);
+      ctx.restore();
     });
   }
 }

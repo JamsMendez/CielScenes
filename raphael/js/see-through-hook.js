@@ -61,8 +61,10 @@ sceneSeeThroughLayer = function (g, sceneW, sceneH, progress) {
   g.scale(zoom, zoom);
   g.translate(-cx, -cy);
   for (var i = 0; i < spriteSet.length; i++) {
-    var angle = gold.rotation + (i / spriteSet.length) * TAU;
     var sprite = spriteSet[i];
+    // Same angle as glyph-rings.js's glyphRingSpriteAngle (kept inline: this hook only relies on what the scene
+    // passes it, see the stubbed hook check in CielWin's alert-title-reach.checks.js).
+    var angle = gold.rotation + (sprite.ringAngle !== undefined ? sprite.ringAngle : (i / spriteSet.length) * TAU);
     g.save();
     g.translate(cx + Math.cos(angle) * gold.radius, cy + Math.sin(angle) * gold.radius);
     g.rotate(glyphRingOrientationAngle(angle));

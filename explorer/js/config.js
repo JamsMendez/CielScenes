@@ -27,6 +27,11 @@ const SEED = 0x9e77c0de;
 // glyphs.js for the generation-time enforcement (IDL-16). Defined here (not in glyphs.js) because
 // config.js loads first and OUTER_GLYPH_SIZE_FRACTION_OF_THICKNESS below also needs it.
 const GLYPH_LOCAL_HALF_EXTENT = 0.45;
+// The invented blackletter script the lettered rings draw (glyphs.js's makeScriptGlyph), the same hand as raphael's
+// gold and blue rings: a broad nib this long and thin, as fractions of the glyph height, held at this angle.
+const RING_SCRIPT_NIB_FRACTION = 0.2;
+const RING_SCRIPT_NIB_THIN_FRACTION = 0.035;
+const RING_SCRIPT_NIB_ANGLE = (35 * Math.PI) / 180;
 
 // --- Composition -------------------------------------------------------------
 // Center of the ring system (every ring 2-8 is a circle around this point), as a fraction of
@@ -218,9 +223,11 @@ const RULER_CACHE_OUTER_RADIUS_FRACTION =
 // --- Ring 7: paragraph ring ---------------------------------------------------------
 // Shifted inward with the ruler (see ring 6) by the same amount the gap shrank (0.032), keeping
 // its own thickness/row layout otherwise unchanged.
-const PARAGRAPH_RING_INNER_RADIUS_FRACTION = 0.655;
-const PARAGRAPH_RING_ROW_COUNT = 5;
-const PARAGRAPH_ROW_GAP_FRACTION = 0.017;
+// Four rows (was five, at a 0.017 gap from 0.655): the wider gap and the shifted first row keep the band's
+// inner and outer edges where they were, so the fewer rows get larger, easier-to-tell-apart script glyphs.
+const PARAGRAPH_RING_INNER_RADIUS_FRACTION = 0.6575;
+const PARAGRAPH_RING_ROW_COUNT = 4;
+const PARAGRAPH_ROW_GAP_FRACTION = 0.021;
 const PARAGRAPH_GLYPH_COUNT = 300; // glyphs per row
 const PARAGRAPH_GLYPH_COLOR = 'rgba(217,217,217,0.55)';
 const PARAGRAPH_ROTATION = 0;
