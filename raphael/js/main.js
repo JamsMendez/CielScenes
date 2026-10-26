@@ -121,14 +121,16 @@ function render(ms) {
     ctx.scale(zoom, zoom);
     ctx.translate(-cx, -cy);
 
-    // Mini keeps the gold glyph ring, the golden hexadecagon, the perspective rays and the central core
-    // (plus the gold nebula): no feathers, ovals, stars, streaks, flares, chroma loops, grain, vignette or
-    // counters.
+    // Mini keeps the gold glyph ring, the golden hexadecagon, the perspective rays, the central core and the
+    // stars that fly out from the centre and back (plus the gold nebula): no feathers, ovals, streaks, flares,
+    // chroma loops, grain, vignette or counters.
     if (!isMiniVariant) {
       drawFeathers(cx, cy, p, phase);
       drawSoftOvalFields(cx, cy, phase);
       drawCircularOvalFields(cx, cy, phase);
-      drawStars(cx, cy, p, phase);
+    }
+    drawStars(cx, cy, p, phase);
+    if (!isMiniVariant) {
       drawRadialStreaks(cx, cy, p);
       drawLensFlares(cx, cy, phase);
       drawChromaticSideLoops(phase);
