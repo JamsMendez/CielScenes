@@ -630,7 +630,8 @@ function drawStars(cx, cy, p, phase) {
     const y = cy + Math.sin(s.a) * H * 0.91 * d;
     const tw = 0.32 + 0.68 * Math.sin(phase * 1.5 + s.twinkle) ** 2;
     const alpha = (0.08 + z * 0.78) * tw;
-    const r = s.r * (0.42 + z * 1.38) * BACKGROUND_PARTICLE_SIZE_MULTIPLIER;
+    const baseRadius = isMiniVariant ? Math.min(s.r, MINI_STAR_MAX_BASE_RADIUS) : s.r;
+    const r = baseRadius * (0.42 + z * 1.38) * BACKGROUND_PARTICLE_SIZE_MULTIPLIER;
     const color = s.warm ? '255,246,192' : '238,250,255';
     ctx.fillStyle = `rgba(${color},${alpha})`;
     fillCircle(x, y, r);
