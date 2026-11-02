@@ -50,6 +50,10 @@ const MINI_SCENE_ZOOM = 1.3507;
 // its far edge (0.40 * side + half the 2 px delimiter * zoom) stays inside the 0.41 * side opaque edge-fade radius
 // (render-loop.js MINI_EDGE_FADE_INNER) down to a 135 px window.
 const MINI_RING_RADIUS_FRACTION = 0.40;
+// Mini stars: the bright stars' base radius (scene-data.js, 1.15..3.0) is capped at the largest regular one
+// (0.28 + 1.20), so a bright star flying close grows like a regular one instead of turning into a thick dot in
+// the small window. The wallpaper keeps the full range.
+const MINI_STAR_MAX_BASE_RADIUS = 1.48;
 // mini-scene-window T2e: the mini nebula's alpha fade, in half-side units from the window center
 // (1.0 = the middle of an edge). Wider than processing's (0.5..0.9) so the gold cloud reaches out toward
 // the edges, but it is 0 at its end, so every edge and corner pixel stays fully transparent.
