@@ -36,10 +36,10 @@ function sceneSeeThroughLayer(g, sceneW, sceneH, progress) {
   g.scale(viewZoom, viewZoom);
   var bands = foldingBandParameters(progress);
   for (var i = 0; i < bands.length; i++) {
-    var rx = bands[i][0], ry = bands[i][1], rot = bands[i][2], width = bands[i][3], foldPhase = bands[i][4];
+    var rx = bands[i][0], ry = bands[i][1], rot = bands[i][2], width = bands[i][3], foldPhase = bands[i][4], deform = bands[i][5];
     g.save();
     g.rotate(rot);
-    fillFoldingBandGeometry(g, foldingBandGeometry(rx, ry, width, foldPhase), "rgb(255,255,255)");
+    fillFoldingBandGeometry(g, foldingBandGeometry(rx, ry, width, foldPhase, deform), "rgb(255,255,255)");
     g.restore();
   }
   g.restore();

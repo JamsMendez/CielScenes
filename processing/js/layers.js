@@ -112,31 +112,46 @@ function foldingBandCompressionDerivative(fold) {
   return -0.90 * Math.sin(fold * 2);
 }
 
-function foldingBandGeometry(rx, ry, width, foldPhase) {
-  const segmentCount = Math.max(48, Math.min(84, Math.round(Math.min(W, H) * 0.075)));
+function foldingBandGeometry(rx, ry, width, foldPhase, deform) {
+  const count = miniFoldingBandGeometry(rx, ry, width, foldPhase, deform);
+  const { leftX, leftY, rightX, rightY, front } = miniFoldingBandPoints;
   const points = [];
-
-  for (let i = 0; i <= segmentCount; i++) {
-    const a = (i / segmentCount) * TAU;
-    const x = Math.cos(a) * rx;
-    const y = Math.sin(a) * ry;
-    const tx = -Math.sin(a) * rx;
-    const ty = Math.cos(a) * ry;
-    const tangentLength = Math.hypot(tx, ty);
-    const nx = -ty / tangentLength;
-    const ny = tx / tangentLength;
-    const fold = a * 2 + foldPhase;
-    const compression = foldingBandCompression(fold);
-    const bandWidth = width * compression;
-    const skew = Math.sin(fold) * width * 0.22;
-
-    points.push({
-      left: [x + nx * bandWidth + (tx / tangentLength) * skew, y + ny * bandWidth + (ty / tangentLength) * skew],
-      right: [x - nx * bandWidth - (tx / tangentLength) * skew, y - ny * bandWidth - (ty / tangentLength) * skew],
-      front: 0.5 + 0.5 * Math.cos(fold),
-    });
+  for (let i = 0; i < count; i++) {
+    points.push({ left: [leftX[i], leftY[i]], right: [rightX[i], rightY[i]], front: front[i] });
   }
   return points;
+}
+
+// The bands are wide 3D ribbon rings that behave like rubber bands. Both move all the time, in
+// cycles of BAND_TUMBLE_SECONDS (plus an optional BAND_CALM_SECONDS rest): each ring turns over
+// like a spinning coin around an axis in the screen plane, bent into a saddle (z = bend * cos(2a))
+// that shows two bulging lobes (a "3") from the side. The turn speeds up and slows down and ends on a whole
+// number of half turns, so each ring comes back to its rest pose, which is itself turned by
+// band.restFlip, never flat to the viewer; tilt, saddle and ribbon lean never drop below
+// BAND_REST_DEPTH of their full value, so the rings always read as 3D.
+function rubberBandDeformation(phase, spin, band) {
+  const seconds = (phase / TAU) * ONE_WAY_DURATION;
+  const cycle = BAND_TUMBLE_SECONDS + BAND_CALM_SECONDS;
+  const index = Math.floor(seconds / cycle);
+  const u = Math.min(1, (seconds - index * cycle) / BAND_TUMBLE_SECONDS);
+  // Speed varies through the cycle (1 +- BAND_SPEED_VARIATION) but never reaches zero, so the rings
+  // never stop; u + k sin(2 pi u) / (2 pi) still ends each cycle on its whole number of half turns.
+  const eased = u + (BAND_SPEED_VARIATION * Math.sin(TAU * u)) / TAU;
+  const swing = smoothstep(0, 0.25, u) * (1 - smoothstep(0.7, 1, u));
+  const activity = BAND_REST_DEPTH + (1 - BAND_REST_DEPTH) * swing;
+  const turns = (phase / TAU) * Math.abs(spin);
+  const breath = turns * TAU * 1.5 + band.offset;
+  const strength = RUBBER_BAND_DEFORM_STRENGTH;
+  return {
+    flip: Math.PI * band.halfFlips * (index + eased) + band.restFlip,
+    // The tilt keeps swaying while the ring rests, so the rest pose still shows depth.
+    tilt: band.tilt * (activity + (1 - activity) * Math.sin(breath * 0.5)),
+    bend: band.bend * strength * activity * (0.65 + 0.35 * Math.sin(breath)),
+    bendAngle: turns * TAU * 0.35 + band.offset,
+    lean: band.lean * activity,
+    twistAmp: band.twistAmp * activity,
+    squash: 0.05 * strength * activity * Math.sin(breath * 0.7),
+  };
 }
 
 function fillFoldingBandGeometry(g, points, fillStyle) {
@@ -212,10 +227,18 @@ const miniFoldingBandPoints = {
   rightX: new Float64Array(MINI_FOLDING_BAND_MAX_POINTS),
   rightY: new Float64Array(MINI_FOLDING_BAND_MAX_POINTS),
   front: new Float64Array(MINI_FOLDING_BAND_MAX_POINTS),
+  // Signed facing: > 0 = the ribbon's outer face looks at the viewer, < 0 = its inner face.
+  facing: new Float64Array(MINI_FOLDING_BAND_MAX_POINTS),
+  // View depth of the centreline (> 0 = nearer the viewer than the ring's centre).
+  depth: new Float64Array(MINI_FOLDING_BAND_MAX_POINTS),
 };
 
-// Fills miniFoldingBandPoints exactly as foldingBandGeometry builds its points; returns the point count.
-function miniFoldingBandGeometry(rx, ry, width, foldPhase) {
+// Fills miniFoldingBandPoints with the band edges; returns the point count. In the ring's own frame
+// the centreline is the (squashed) ellipse lifted into a saddle, and the ribbon's cross direction
+// mixes the outward normal and the ring axis by lean + twistAmp * sin(a + foldPhase) (0 = flat,
+// pi / 2 = upright). The ring is then turned over (flip, about the screen y axis), tilted (about x)
+// and projected with perspective.
+function miniFoldingBandGeometry(rx, ry, width, foldPhase, deform) {
   const segmentCount = Math.max(48, Math.min(84, Math.round(Math.min(W, H) * 0.075)));
   const p = miniFoldingBandPoints;
   if (p.segmentCount !== segmentCount) {
@@ -227,33 +250,90 @@ function miniFoldingBandGeometry(rx, ry, width, foldPhase) {
     }
     p.segmentCount = segmentCount;
   }
+  const d = deform || { flip: 0, tilt: 0, bend: 0, bendAngle: 0, lean: 0, twistAmp: 0, squash: 0 };
+  const sx = rx * (1 + d.squash);
+  const sy = ry * (1 - d.squash);
+  const bend = Math.max(rx, ry) * d.bend;
+  const cosFlip = Math.cos(d.flip);
+  const sinFlip = Math.sin(d.flip);
+  const cosTilt = Math.cos(d.tilt);
+  const sinTilt = Math.sin(d.tilt);
+  const focal = Math.max(rx, ry) * 2.8;
+  // Ring frame -> view: flip about y, then tilt about x. Returns [x, y, z].
+  const turn = (x, y, z) => {
+    const fx = x * cosFlip + z * sinFlip;
+    const fz = -x * sinFlip + z * cosFlip;
+    return [fx, y * cosTilt - fz * sinTilt, y * sinTilt + fz * cosTilt];
+  };
+  const project = (v) => {
+    const scale = focal / (focal - v[2]);
+    return [v[0] * scale, v[1] * scale];
+  };
   for (let i = 0; i <= segmentCount; i++) {
     const a = p.angle[i];
-    const x = p.cosA[i] * rx;
-    const y = p.sinA[i] * ry;
-    const tx = -p.sinA[i] * rx;
-    const ty = p.cosA[i] * ry;
-    const tangentLength = Math.hypot(tx, ty);
-    const nx = -ty / tangentLength;
-    const ny = tx / tangentLength;
-    const fold = a * 2 + foldPhase;
-    // C1: compression and front share this dynamic cosine; keep both expressions ordered.
-    const cosFold = Math.cos(fold);
-    const compression = 0.10 + 0.90 * cosFold ** 2;
-    const bandWidth = width * compression;
-    const skew = Math.sin(fold) * width * 0.22;
-    p.leftX[i] = x + nx * bandWidth + (tx / tangentLength) * skew;
-    p.leftY[i] = y + ny * bandWidth + (ty / tangentLength) * skew;
-    p.rightX[i] = x - nx * bandWidth - (tx / tangentLength) * skew;
-    p.rightY[i] = y - ny * bandWidth - (ty / tangentLength) * skew;
-    p.front[i] = 0.5 + 0.5 * cosFold;
+    const ca = p.cosA[i];
+    const sa = p.sinA[i];
+    const saddle = 2 * (a - d.bendAngle);
+    const x = ca * sx;
+    const y = sa * sy;
+    const z = bend * Math.cos(saddle);
+    // Outward normal of the ellipse (ry cos a, rx sin a), normalised.
+    const nLen = Math.hypot(ca * sy, sa * sx) || 1;
+    const nx = (ca * sy) / nLen;
+    const ny = (sa * sx) / nLen;
+    const twist = d.lean + d.twistAmp * Math.sin(a + foldPhase);
+    const bx = nx * Math.cos(twist);
+    const by = ny * Math.cos(twist);
+    const bz = Math.sin(twist);
+    const left = project(turn(x + bx * width, y + by * width, z + bz * width));
+    const right = project(turn(x - bx * width, y - by * width, z - bz * width));
+    p.leftX[i] = left[0];
+    p.leftY[i] = left[1];
+    p.rightX[i] = right[0];
+    p.rightY[i] = right[1];
+    // Facing: the view z of the ribbon surface normal (tangent x cross direction). 1 = the wide face
+    // looks at the viewer, 0 = seen edge-on (darker edge strokes).
+    const tx = -sa * sx;
+    const ty = ca * sy;
+    const tz = -2 * bend * Math.sin(saddle);
+    const n = turn(ty * bz - tz * by, tz * bx - tx * bz, tx * by - ty * bx);
+    p.facing[i] = n[2] / (Math.hypot(n[0], n[1], n[2]) || 1);
+    p.front[i] = Math.abs(p.facing[i]);
+    p.depth[i] = turn(x, y, z)[2];
   }
   return segmentCount + 1;
 }
 
-function drawMiniFoldingBand(cx, cy, rx, ry, rot, width, foldPhase) {
-  const count = miniFoldingBandGeometry(rx, ry, width, foldPhase);
-  const { leftX, leftY, rightX, rightY, front } = miniFoldingBandPoints;
+// Ribbon fill for a segment with signed facing f (see miniFoldingBandPoints.facing): the outer face
+// is near white and brightest when it faces the viewer; the inner face is a cooler, shaded grey, so
+// the ring reads as a solid strip with two sides. Around f = 0 (the ribbon turning edge-on, where
+// one face gives way to the other) the two colours blend over BAND_FACE_BLEND, so there is no seam.
+// Quantised over f and cached, so a steady frame builds no colour strings.
+const BAND_FACE_STEPS = 48;
+const BAND_FACE_BLEND = 0.45;
+const BAND_FACE_BASE_FILL = 'rgb(214,222,230)';
+const bandFaceFills = new Array(2 * BAND_FACE_STEPS + 1).fill(null);
+function bandFaceFill(f) {
+  const step = Math.round(Math.max(-1, Math.min(1, f)) * BAND_FACE_STEPS);
+  const index = step + BAND_FACE_STEPS;
+  let fill = bandFaceFills[index];
+  if (fill === null) {
+    const q = step / BAND_FACE_STEPS;
+    const k = Math.abs(q);
+    const outerLevel = 0.86 + 0.14 * k;
+    const innerLevel = 0.72 + 0.14 * k;
+    const t = smoothstep(-BAND_FACE_BLEND, BAND_FACE_BLEND, q);
+    const r = mix(innerLevel * 0.92, outerLevel, t);
+    const g = mix(innerLevel * 0.96, outerLevel, t);
+    const b = mix(innerLevel, outerLevel, t);
+    fill = bandFaceFills[index] = `rgb(${Math.round(255 * r)},${Math.round(255 * g)},${Math.round(255 * b)})`;
+  }
+  return fill;
+}
+
+function drawMiniFoldingBand(cx, cy, rx, ry, rot, width, foldPhase, deform) {
+  const count = miniFoldingBandGeometry(rx, ry, width, foldPhase, deform);
+  const { leftX, leftY, rightX, rightY, front, facing } = miniFoldingBandPoints;
   const segmentLineWidth = Math.max(structurePx(0.75, 0.4), width * 0.045);
 
   ctx.save();
@@ -262,8 +342,11 @@ function drawMiniFoldingBand(cx, cy, rx, ry, rot, width, foldPhase) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  if (isMiniVariant) {
-    ctx.fillStyle = 'rgb(255,255,255)';
+  // The mini fills the whole band once in white; the wallpaper lays the same single fill in a mid
+  // band shade first, so the anti-aliased seams between its separately shaded quads show band
+  // colour instead of the dark background (they read as faint lines across the ribbon otherwise).
+  {
+    ctx.fillStyle = isMiniVariant ? 'rgb(255,255,255)' : BAND_FACE_BASE_FILL;
     ctx.beginPath();
     for (let i = 0; i < count - 1; i++) {
       ctx.moveTo(leftX[i], leftY[i]);
@@ -277,9 +360,10 @@ function drawMiniFoldingBand(cx, cy, rx, ry, rot, width, foldPhase) {
 
   for (let i = 0; i < count - 1; i++) {
     const segmentFront = (front[i] + front[i + 1]) * 0.5;
-    // B5: the wallpaper keeps the reference order, each quad filled right before its edge stroke.
+    // B5: the wallpaper keeps the reference order, each quad filled right before its edge stroke,
+    // shaded by which face it shows (bandFaceFill); the mini keeps its single white fill.
     if (!isMiniVariant) {
-      ctx.fillStyle = 'rgb(255,255,255)';
+      ctx.fillStyle = bandFaceFill((facing[i] + facing[i + 1]) * 0.5);
       ctx.beginPath();
       ctx.moveTo(leftX[i], leftY[i]);
       ctx.lineTo(leftX[i + 1], leftY[i + 1]);
@@ -313,16 +397,95 @@ function drawMiniFoldingBand(cx, cy, rx, ry, rot, width, foldPhase) {
   ctx.beginPath();
   ctx.moveTo(leftX[0], leftY[0]);
   for (let i = 1; i < count; i++) ctx.lineTo(leftX[i], leftY[i]);
-  for (let i = 0; i < count; i++) ctx.lineTo(rightX[i], rightY[i]);
-  ctx.closePath();
+  ctx.moveTo(rightX[0], rightY[0]);
+  for (let i = 1; i < count; i++) ctx.lineTo(rightX[i], rightY[i]);
   ctx.stroke();
   ctx.restore();
 }
 
-// PERF-5: the band outline path above as segments, into wallpaperSegmentBuffer: the left edge, the
-// bar to the right edge, the right edge and the closing bar back. The two bars coincide on a closed
-// band (the first and last points are the same angle), so the closing one is then left out: the
-// reference strokes them as one path, whose shadow blurs their union once.
+// The near half of a band: every segment whose centreline is nearer the viewer than the ring's
+// centre, drawn again after the octagon and the prism (drawAtomicOrbitsFront), so a tilted ring
+// passes in front of the centre on its near side and behind it on its far side. Same fill, edge
+// strokes and glowing outline as drawMiniFoldingBand, without the bars across the cut ends.
+function drawFoldingBandFront(cx, cy, rx, ry, rot, width, foldPhase, deform) {
+  const count = miniFoldingBandGeometry(rx, ry, width, foldPhase, deform);
+  const { leftX, leftY, rightX, rightY, front, facing, depth } = miniFoldingBandPoints;
+  const near = (i) => depth[i] + depth[i + 1] > 0;
+  let nearCount = 0;
+  for (let i = 0; i < count - 1; i++) if (near(i)) nearCount++;
+  if (nearCount === 0) return;
+  const segmentLineWidth = Math.max(structurePx(0.75, 0.4), width * 0.045);
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rot);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  // Same seam cover as drawMiniFoldingBand, over the near segments only.
+  ctx.fillStyle = isMiniVariant ? 'rgb(255,255,255)' : BAND_FACE_BASE_FILL;
+  ctx.beginPath();
+  for (let i = 0; i < count - 1; i++) {
+    if (!near(i)) continue;
+    ctx.moveTo(leftX[i], leftY[i]);
+    ctx.lineTo(leftX[i + 1], leftY[i + 1]);
+    ctx.lineTo(rightX[i + 1], rightY[i + 1]);
+    ctx.lineTo(rightX[i], rightY[i]);
+    ctx.closePath();
+  }
+  ctx.fill();
+  for (let i = 0; i < count - 1; i++) {
+    if (!near(i)) continue;
+    ctx.fillStyle = isMiniVariant ? 'rgb(255,255,255)' : bandFaceFill((facing[i] + facing[i + 1]) * 0.5);
+    ctx.beginPath();
+    ctx.moveTo(leftX[i], leftY[i]);
+    ctx.lineTo(leftX[i + 1], leftY[i + 1]);
+    ctx.lineTo(rightX[i + 1], rightY[i + 1]);
+    ctx.lineTo(rightX[i], rightY[i]);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = layerRgba(MINI_BAND_EDGE_RGBA, 0.08 + (1 - (front[i] + front[i + 1]) * 0.5) * 0.22);
+    ctx.lineWidth = segmentLineWidth;
+    ctx.beginPath();
+    ctx.moveTo(rightX[i], rightY[i]);
+    ctx.lineTo(rightX[i + 1], rightY[i + 1]);
+    ctx.stroke();
+  }
+
+  const outlineWidth = Math.max(structurePx(1.15, 0.5), width * 0.11);
+  const outlineGlow = isMiniVariant ? null
+    : wallpaperLineGlow(outlineWidth, 'rgb(255,255,255)', 'butt', 'rgba(255,255,255,0.78)', structurePx(12, 1));
+  if (outlineGlow) {
+    const coords = wallpaperSegmentBuffer(2 * nearCount);
+    let n = 0;
+    for (let i = 0; i < count - 1; i++) {
+      if (!near(i)) continue;
+      let o = 4 * n++;
+      coords[o] = leftX[i]; coords[o + 1] = leftY[i]; coords[o + 2] = leftX[i + 1]; coords[o + 3] = leftY[i + 1];
+      o = 4 * n++;
+      coords[o] = rightX[i]; coords[o + 1] = rightY[i]; coords[o + 2] = rightX[i + 1]; coords[o + 3] = rightY[i + 1];
+    }
+    stampWallpaperLineGlows(outlineGlow, wallpaperSegmentCoords, 0, n);
+  } else {
+    ctx.shadowColor = 'rgba(255,255,255,0.78)';
+    ctx.shadowBlur = structurePx(12, 1);
+  }
+  ctx.lineWidth = outlineWidth;
+  ctx.strokeStyle = 'rgb(255,255,255)';
+  ctx.beginPath();
+  for (let i = 0; i < count - 1; i++) {
+    if (!near(i)) continue;
+    ctx.moveTo(leftX[i], leftY[i]);
+    ctx.lineTo(leftX[i + 1], leftY[i + 1]);
+    ctx.moveTo(rightX[i], rightY[i]);
+    ctx.lineTo(rightX[i + 1], rightY[i + 1]);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// PERF-5: the band outline above as segments, into wallpaperSegmentBuffer: the left edge and the
+// right edge, each a closed loop of its own. No bar joins them across the ribbon: on a shaded band a
+// bright bar there showed as a stray line travelling with the ring.
 function foldingBandOutlineSegments(count) {
   const { leftX, leftY, rightX, rightY } = miniFoldingBandPoints;
   const coords = wallpaperSegmentBuffer(2 * count);
@@ -335,22 +498,18 @@ function foldingBandOutlineSegments(count) {
     coords[o + 3] = y2;
   };
   for (let i = 0; i < count - 1; i++) push(leftX[i], leftY[i], leftX[i + 1], leftY[i + 1]);
-  push(leftX[count - 1], leftY[count - 1], rightX[0], rightY[0]);
   for (let i = 0; i < count - 1; i++) push(rightX[i], rightY[i], rightX[i + 1], rightY[i + 1]);
-  const same = Math.max(Math.abs(rightX[count - 1] - rightX[0]), Math.abs(rightY[count - 1] - rightY[0]),
-    Math.abs(leftX[0] - leftX[count - 1]), Math.abs(leftY[0] - leftY[count - 1])) < 1e-6;
-  if (!same) push(rightX[count - 1], rightY[count - 1], leftX[0], leftY[0]);
   return n;
 }
 
 // Linux mini optimization end.
-function drawFoldingBand(cx, cy, rx, ry, rot, width, foldPhase) {
+function drawFoldingBand(cx, cy, rx, ry, rot, width, foldPhase, deform) {
   // Linux mini optimization begin (O2): see drawMiniFoldingBand (B5: the wallpaper too, so the reference
   // body below is kept only as the CielWin text it replaces).
-  drawMiniFoldingBand(cx, cy, rx, ry, rot, width, foldPhase);
+  drawMiniFoldingBand(cx, cy, rx, ry, rot, width, foldPhase, deform);
   return;
   // Linux mini optimization end.
-  const points = foldingBandGeometry(rx, ry, width, foldPhase);
+  const points = foldingBandGeometry(rx, ry, width, foldPhase, deform);
 
   ctx.save();
   ctx.translate(cx, cy);
@@ -1318,22 +1477,38 @@ function drawTriangularPrism(cx, cy, progress) {
   ctx.restore();
 }
 
+// Band ring shapes: radius and ribbon half-width (fractions of min(W, H)), ribbon lean between flat
+// (0) and upright (pi / 2) and its travelling twist, tilt, saddle bend (fraction of the radius) and
+// half turns per tumble (sign = direction) and the rest pose's turn. Both rings turn at the same
+// speed in opposite directions; their tilts, rest poses and radii keep them distinct and apart.
+const FOLDING_BANDS = [
+  { radius: 0.32, width: 0.018, lean: 0.9, twistAmp: 0.9, tilt: 0.30, bend: 0.22, halfFlips: 2, restFlip: 0.45, offset: 0.0, rot: -0.76 },
+  { radius: 0.245, width: 0.016, lean: 1.1, twistAmp: 0.6, tilt: -0.25, bend: 0.30, halfFlips: -2, restFlip: -0.4, offset: 2.2, rot: 0.36 },
+];
+
 function foldingBandParameters(progress) {
   const minD = Math.min(W, H);
   const phase = progress * TAU;
-  const [outerBandSpeed, middleBandSpeed, innerBandSpeed] = FOLDING_BAND_SPEEDS;
   const thin = isMiniVariant ? MINI_FOLDING_BAND_WIDTH_FACTOR : 1; // T2m: mini bands are thinner, nothing else changes
-  return [
-    [minD * 0.385, minD * 0.255, -0.76 + phase * outerBandSpeed, minD * 0.025 * thin, phase * outerBandSpeed],
-    [minD * 0.235, minD * 0.365,  0.36 + phase * middleBandSpeed, minD * 0.023 * thin, phase * middleBandSpeed + 0.9],
-    [minD * 0.315, minD * 0.225,  0.10 + phase * innerBandSpeed, minD * 0.018 * thin, phase * innerBandSpeed + 1.8],
-  ];
+  return FOLDING_BANDS.map((band, i) => {
+    const speed = FOLDING_BAND_SPEEDS[i];
+    const r = minD * band.radius;
+    return [r, r, band.rot + phase * speed, minD * band.width * thin, phase * speed * 0.5 + band.offset,
+      rubberBandDeformation(phase, speed, band)];
+  });
 }
 
 function drawAtomicOrbits(cx, cy, progress) {
-  // Keep every band's inner edge outside the octagon so its silhouette stays readable.
-  for (const [rx, ry, rot, width, foldPhase] of foldingBandParameters(progress)) {
-    drawFoldingBand(cx, cy, rx, ry, rot, width, foldPhase);
+  // Tilted rings can pass behind the octagon; it is drawn after the bands, so it stays on top.
+  for (const [rx, ry, rot, width, foldPhase, deform] of foldingBandParameters(progress)) {
+    drawFoldingBand(cx, cy, rx, ry, rot, width, foldPhase, deform);
+  }
+}
+
+// The bands' near halves, over the octagon and the prism (see drawFoldingBandFront).
+function drawAtomicOrbitsFront(cx, cy, progress) {
+  for (const [rx, ry, rot, width, foldPhase, deform] of foldingBandParameters(progress)) {
+    drawFoldingBandFront(cx, cy, rx, ry, rot, width, foldPhase, deform);
   }
 }
 
