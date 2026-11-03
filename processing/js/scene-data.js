@@ -62,38 +62,17 @@ const filmGrain = Array.from({ length: 180 }, () => ({
   alpha: 0.008 + rnd() * 0.026,
 }));
 
-// Ring slots remain interleaved so the default seeded size, radial-jitter, and tilt variation
-// retains its established stream. Each ring gets one seeded offset, then exact even phase spacing.
-function createOrbitBlocks(ringCounts, random = rnd) {
-  if (ringCounts.length !== ORBIT_BLOCK_RING_COUNT ||
-      ringCounts.some((count) => !Number.isInteger(count) || count < 0)) {
-    throw new Error('Orbit-block ring counts must be non-negative integers for outer and inner rings.');
+// One flat circular orbit: a single seeded offset, then exact even phase spacing. The orbit blocks are
+// the last consumer of the shared rnd() stream, so their sample count affects nothing after them.
+function createOrbitBlocks(count, random = rnd) {
+  if (!Number.isInteger(count) || count < 0) {
+    throw new Error('Orbit-block count must be a non-negative integer.');
   }
-  const ringPhaseOffsets = Array(ORBIT_BLOCK_RING_COUNT);
-  const blocks = [];
-  const largestRingCount = Math.max(...ringCounts, 0);
-  for (let ringIndex = 0; ringIndex < largestRingCount; ringIndex++) {
-    for (let ring = 0; ring < ORBIT_BLOCK_RING_COUNT; ring++) {
-      const count = ringCounts[ring];
-      if (ringIndex >= count) continue;
-      // Consume the legacy phase sample for every block so spacing changes do not shift the
-      // deterministic seeded variation that follows it in each descriptor.
-      const phaseSample = random();
-      if (ringPhaseOffsets[ring] === undefined) ringPhaseOffsets[ring] = (phaseSample - 0.5) * 0.10;
-      blocks.push({
-        ring,
-        ringIndex,
-        phase: ringIndex / count * TAU + ringPhaseOffsets[ring],
-        size: 7 + random() * 12,
-        radialJitter: 0.82 + random() * 0.32,
-        tilt: (random() - 0.5) * 0.55,
-      });
-    }
-  }
-  return blocks;
+  const phaseOffset = count > 0 ? (random() - 0.5) * 0.10 : 0;
+  return Array.from({ length: count }, (_, index) => ({ phase: index / count * TAU + phaseOffset }));
 }
 
-const orbitBlocks = createOrbitBlocks(ORBIT_BLOCK_RING_COUNTS);
+const orbitBlocks = createOrbitBlocks(ORBIT_BLOCK_COUNT);
 
 const RAINBOW_STOPS = [
   [0.00, '64,210,255'],
