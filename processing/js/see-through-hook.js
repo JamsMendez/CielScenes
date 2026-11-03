@@ -20,7 +20,8 @@
 function sceneAlertTitleLimits(sceneW, sceneH) {
   var minD = Math.min(sceneW, sceneH);
   var miniK = isMiniVariant ? MINI_POLYGON_STROKE_PX / 5.1 : 1;
-  var reach = minD * 0.168 * 1.025 + 6.8 * miniK * 1.72 / 2;
+  // The octagon is drawn under scale(viewZoom) about the scene center, so its reach scales with it.
+  var reach = (minD * OCTAGON_RADIUS_FACTOR * 1.025 + 6.8 * miniK * 1.72 / 2) * viewZoom;
   var cy = sceneH * 0.515;
   var margin = Math.max(3, minD * 0.012);
   return { top: cy - reach - margin, bottom: cy + reach + margin };
