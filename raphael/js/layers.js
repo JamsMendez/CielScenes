@@ -260,6 +260,13 @@ function drawSoftOvalFields(cx, cy, phase) {
   });
 }
 
+// Circular ovals use one isotropic size for both axes (the geometric mean of softOvalViewportAxes,
+// so their average size is unchanged): wide/ultrawide viewports no longer stretch them into ovals.
+function circularOvalViewportAxes(width = W, height = H) {
+  const sharedViewportSize = Math.sqrt(width * height);
+  return { x: sharedViewportSize, y: sharedViewportSize };
+}
+
 // RAP-4: the additional circular-oval field shares softOvalFieldState's drift/breathe math (same
 // field shape) but its own independent size/motion/breath factors and visible-alpha mapping, so
 // tuning it never moves the original soft ovals.
@@ -268,7 +275,7 @@ function circularOvalFieldState(cx, cy, phase, field) {
   const orbit = cyclePhase + field.phase;
   const breath = 0.5 + 0.5 * Math.sin(orbit);
   const scale = Math.max(0.2, 0.99 + (breath - 0.5) * 0.30 * CIRCULAR_OVAL_BREATH_FACTOR);
-  const viewportAxes = softOvalViewportAxes();
+  const viewportAxes = circularOvalViewportAxes();
   return {
     x: cx + W * (field.x - 0.505) + Math.cos(orbit) * W * field.orbitX * CIRCULAR_OVAL_MOTION_FACTOR,
     y: cy + H * (field.y - 0.515) + Math.sin(orbit) * H * field.orbitY * CIRCULAR_OVAL_MOTION_FACTOR,
