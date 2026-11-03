@@ -122,35 +122,52 @@ function foldingBandGeometry(rx, ry, width, foldPhase, deform) {
   return points;
 }
 
-// The bands are wide 3D ribbon rings that behave like rubber bands. Both move all the time, in
-// cycles of BAND_TUMBLE_SECONDS (plus an optional BAND_CALM_SECONDS rest): each ring turns over
-// like a spinning coin around an axis in the screen plane, bent into a saddle (z = bend * cos(2a))
-// that shows two bulging lobes (a "3") from the side. The turn speeds up and slows down and ends on a whole
-// number of half turns, so each ring comes back to its rest pose, which is itself turned by
-// band.restFlip, never flat to the viewer; tilt, saddle and ribbon lean never drop below
-// BAND_REST_DEPTH of their full value, so the rings always read as 3D.
+// Band motion circuit, taken from two reference clips. Each band is a closed ribbon ring that loops
+// through this circuit every BAND_CIRCUIT_SECONDS: the wide ring contracts into a tilted ellipse
+// (the two bands, on different axes, cross like an atom) and expands back, while the twist that
+// travels along the ribbon grows and fades (stretches turning edge-on almost vanish, so the ring
+// looks cut into pieces) and the ring's axis precesses. Every motion runs at constant speed, with no
+// easing or rebound:
+// - precession (roll) and the travelling twist advance at a constant angular rate;
+// - contraction/expansion is a triangle wave in the ring's visible height, cos(tilt), so it shrinks
+//   and grows at a constant rate (a linear tilt would look slow near the wide ring and fast near the
+//   ellipse);
+// - torsion is a triangle wave too, a quarter circuit ahead of the contraction.
+// Tilt (about the screen x axis) of the ellipse at full contraction.
+const BAND_ELLIPSE_TILT = 1.05;
+
+const BAND_REST_DEFORM = { flip: 0, tilt: 0, roll: 0, bend: 0, bendAngle: 0, lean: 0, twistAmp: 0, travel: 0 };
+
+// 0 at u = 0, 1 at u = 0.5, back to 0 at u = 1; constant slope.
+function bandTriangleWave(u) {
+  const f = u - Math.floor(u);
+  return 1 - Math.abs(2 * f - 1);
+}
+
 function rubberBandDeformation(phase, spin, band) {
-  const seconds = (phase / TAU) * ONE_WAY_DURATION;
-  const cycle = BAND_TUMBLE_SECONDS + BAND_CALM_SECONDS;
-  const index = Math.floor(seconds / cycle);
-  const u = Math.min(1, (seconds - index * cycle) / BAND_TUMBLE_SECONDS);
-  // Speed varies through the cycle (1 +- BAND_SPEED_VARIATION) but never reaches zero, so the rings
-  // never stop; u + k sin(2 pi u) / (2 pi) still ends each cycle on its whole number of half turns.
-  const eased = u + (BAND_SPEED_VARIATION * Math.sin(TAU * u)) / TAU;
-  const swing = smoothstep(0, 0.25, u) * (1 - smoothstep(0.7, 1, u));
-  const activity = BAND_REST_DEPTH + (1 - BAND_REST_DEPTH) * swing;
-  const turns = (phase / TAU) * Math.abs(spin);
-  const breath = turns * TAU * 1.5 + band.offset;
+  // progress (phase / TAU) counts base repetitions of ANIMATION_CYCLE_DURATION seconds (main.js).
+  const seconds = (phase / TAU) * ANIMATION_CYCLE_DURATION;
+  const cycles = seconds / BAND_CIRCUIT_SECONDS;
   const strength = RUBBER_BAND_DEFORM_STRENGTH;
+  const direction = spin < 0 ? -1 : 1;
+
+  const contraction = bandTriangleWave(cycles);
+  const torsion = bandTriangleWave(cycles + 0.25);
+  // Visible height goes linearly from the wide ring's to the ellipse's and back.
+  const restHeight = Math.cos(band.tilt);
+  const height = restHeight + (Math.cos(BAND_ELLIPSE_TILT) - restHeight) * contraction;
+  const tiltSign = band.tilt < 0 ? -1 : 1;
+  // Travelling twist: face-on and edge-on stretches run along the ribbon.
+  const travel = direction * TAU * cycles * 1.5 + band.offset;
   return {
-    flip: Math.PI * band.halfFlips * (index + eased) + band.restFlip,
-    // The tilt keeps swaying while the ring rests, so the rest pose still shows depth.
-    tilt: band.tilt * (activity + (1 - activity) * Math.sin(breath * 0.5)),
-    bend: band.bend * strength * activity * (0.65 + 0.35 * Math.sin(breath)),
-    bendAngle: turns * TAU * 0.35 + band.offset,
-    lean: band.lean * activity,
-    twistAmp: band.twistAmp * activity,
-    squash: 0.05 * strength * activity * Math.sin(breath * 0.7),
+    flip: band.restFlip,
+    tilt: tiltSign * Math.acos(height),
+    roll: band.precess * cycles,
+    bend: band.bend * strength * (0.45 + 0.55 * torsion),
+    bendAngle: travel * 0.5,
+    lean: band.lean,
+    twistAmp: band.twistAmp * (0.6 + 0.9 * strength * torsion),
+    travel,
   };
 }
 
@@ -218,9 +235,6 @@ function layerRgba(table, alpha) {
 // which the next quad's fill used to paint over, now stays visible (a sub-pixel darker dot per joint).
 const MINI_FOLDING_BAND_MAX_POINTS = 85;
 const miniFoldingBandPoints = {
-  segmentCount: 0,
-  cosA: new Float64Array(MINI_FOLDING_BAND_MAX_POINTS),
-  sinA: new Float64Array(MINI_FOLDING_BAND_MAX_POINTS),
   angle: new Float64Array(MINI_FOLDING_BAND_MAX_POINTS),
   leftX: new Float64Array(MINI_FOLDING_BAND_MAX_POINTS),
   leftY: new Float64Array(MINI_FOLDING_BAND_MAX_POINTS),
@@ -234,54 +248,49 @@ const miniFoldingBandPoints = {
 };
 
 // Fills miniFoldingBandPoints with the band edges; returns the point count. In the ring's own frame
-// the centreline is the (squashed) ellipse lifted into a saddle, and the ribbon's cross direction
-// mixes the outward normal and the ring axis by lean + twistAmp * sin(a + foldPhase) (0 = flat,
-// pi / 2 = upright). The ring is then turned over (flip, about the screen y axis), tilted (about x)
-// and projected with perspective.
+// the centreline is the ellipse lifted into a saddle (bend), and the ribbon's cross direction mixes
+// the outward normal and the ring axis by lean + twistAmp * sin(2a + foldPhase - travel) (0 = flat,
+// pi / 2 = upright), a twist that travels along the ribbon. The ring is then turned over (flip,
+// about the screen y axis), tilted (about x), rolled in the screen plane (roll, the precession) and
+// projected with perspective.
 function miniFoldingBandGeometry(rx, ry, width, foldPhase, deform) {
   const segmentCount = Math.max(48, Math.min(84, Math.round(Math.min(W, H) * 0.075)));
   const p = miniFoldingBandPoints;
-  if (p.segmentCount !== segmentCount) {
-    for (let i = 0; i <= segmentCount; i++) {
-      const a = (i / segmentCount) * TAU;
-      p.angle[i] = a;
-      p.cosA[i] = Math.cos(a);
-      p.sinA[i] = Math.sin(a);
-    }
-    p.segmentCount = segmentCount;
-  }
-  const d = deform || { flip: 0, tilt: 0, bend: 0, bendAngle: 0, lean: 0, twistAmp: 0, squash: 0 };
-  const sx = rx * (1 + d.squash);
-  const sy = ry * (1 - d.squash);
-  const bend = Math.max(rx, ry) * d.bend;
+  const d = deform || BAND_REST_DEFORM;
+  const radius = Math.max(rx, ry);
+  const bend = radius * d.bend;
   const cosFlip = Math.cos(d.flip);
   const sinFlip = Math.sin(d.flip);
   const cosTilt = Math.cos(d.tilt);
   const sinTilt = Math.sin(d.tilt);
-  const focal = Math.max(rx, ry) * 2.8;
+  const cosRoll = Math.cos(d.roll);
+  const sinRoll = Math.sin(d.roll);
+  const focal = radius * 2.8;
   // Ring frame -> view: flip about y, then tilt about x. Returns [x, y, z].
   const turn = (x, y, z) => {
     const fx = x * cosFlip + z * sinFlip;
     const fz = -x * sinFlip + z * cosFlip;
     return [fx, y * cosTilt - fz * sinTilt, y * sinTilt + fz * cosTilt];
   };
+  // Roll in the screen plane (it leaves the view depth unchanged), then perspective.
   const project = (v) => {
     const scale = focal / (focal - v[2]);
-    return [v[0] * scale, v[1] * scale];
+    return [(v[0] * cosRoll - v[1] * sinRoll) * scale, (v[0] * sinRoll + v[1] * cosRoll) * scale];
   };
   for (let i = 0; i <= segmentCount; i++) {
-    const a = p.angle[i];
-    const ca = p.cosA[i];
-    const sa = p.sinA[i];
+    const a = (i / segmentCount) * TAU;
+    p.angle[i] = a;
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
     const saddle = 2 * (a - d.bendAngle);
-    const x = ca * sx;
-    const y = sa * sy;
+    const x = ca * rx;
+    const y = sa * ry;
     const z = bend * Math.cos(saddle);
-    // Outward normal of the ellipse (ry cos a, rx sin a), normalised.
-    const nLen = Math.hypot(ca * sy, sa * sx) || 1;
-    const nx = (ca * sy) / nLen;
-    const ny = (sa * sx) / nLen;
-    const twist = d.lean + d.twistAmp * Math.sin(a + foldPhase);
+    // Outward normal of the base ellipse (ry cos a, rx sin a), normalised.
+    const nLen = Math.hypot(ca * ry, sa * rx) || 1;
+    const nx = (ca * ry) / nLen;
+    const ny = (sa * rx) / nLen;
+    const twist = d.lean + d.twistAmp * Math.sin(2 * a + foldPhase - d.travel);
     const bx = nx * Math.cos(twist);
     const by = ny * Math.cos(twist);
     const bz = Math.sin(twist);
@@ -293,8 +302,8 @@ function miniFoldingBandGeometry(rx, ry, width, foldPhase, deform) {
     p.rightY[i] = right[1];
     // Facing: the view z of the ribbon surface normal (tangent x cross direction). 1 = the wide face
     // looks at the viewer, 0 = seen edge-on (darker edge strokes).
-    const tx = -sa * sx;
-    const ty = ca * sy;
+    const tx = -sa * rx;
+    const ty = ca * ry;
     const tz = -2 * bend * Math.sin(saddle);
     const n = turn(ty * bz - tz * by, tz * bx - tx * bz, tx * by - ty * bx);
     p.facing[i] = n[2] / (Math.hypot(n[0], n[1], n[2]) || 1);
@@ -1477,13 +1486,14 @@ function drawTriangularPrism(cx, cy, progress) {
   ctx.restore();
 }
 
-// Band ring shapes: radius and ribbon half-width (fractions of min(W, H)), ribbon lean between flat
-// (0) and upright (pi / 2) and its travelling twist, tilt, saddle bend (fraction of the radius) and
-// half turns per tumble (sign = direction) and the rest pose's turn. Both rings turn at the same
-// speed in opposite directions; their tilts, rest poses and radii keep them distinct and apart.
+// Band shapes: radius and ribbon half-width (fractions of min(W, H)), ribbon lean between flat (0)
+// and upright (pi / 2) and its travelling twist, open-ring tilt, saddle bend (fraction of the
+// radius), the fixed turn about the screen y axis (restFlip) and the precession per circuit
+// (precess, radians; sign = direction). Opposite tilts, precessions and different rot keep the
+// two bands on different axes, so their ellipses cross after the release.
 const FOLDING_BANDS = [
-  { radius: 0.32, width: 0.018, lean: 0.9, twistAmp: 0.9, tilt: 0.30, bend: 0.22, halfFlips: 2, restFlip: 0.45, offset: 0.0, rot: -0.76 },
-  { radius: 0.245, width: 0.016, lean: 1.1, twistAmp: 0.6, tilt: -0.25, bend: 0.30, halfFlips: -2, restFlip: -0.4, offset: 2.2, rot: 0.36 },
+  { radius: 0.32, width: 0.018, lean: 0.9, twistAmp: 0.9, tilt: 0.30, bend: 0.22, restFlip: 0.45, precess: 0.9, offset: 0.0, rot: -0.76 },
+  { radius: 0.245, width: 0.016, lean: 1.1, twistAmp: 0.6, tilt: -0.25, bend: 0.30, restFlip: -0.4, precess: -0.9, offset: 2.2, rot: 0.36 },
 ];
 
 function foldingBandParameters(progress) {
