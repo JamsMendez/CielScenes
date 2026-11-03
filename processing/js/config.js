@@ -174,7 +174,8 @@ const SOFT_OVAL_SIZE_FACTOR = 0.25;
 // Caps viewport-only oval-axis stretching without changing each field's intentional rx/ry shape.
 // 1 keeps the viewport contribution circular; larger values allow up to that horizontal:vertical
 // (or vertical:horizontal) stretch before capping. Must be a finite number greater than or equal to 1.
-const SOFT_OVAL_VIEWPORT_AXIS_STRETCH_CAP = 1.35;
+// 1: wide/ultrawide viewports no longer stretch the soft ovals horizontally.
+const SOFT_OVAL_VIEWPORT_AXIS_STRETCH_CAP = 1;
 // Multiplicador del movimiento de los círculos/óvalos verdes y azules configurados: cuánto se alejan al girar
 // alrededor de su posición y cuánto se inclinan. 1 = movimiento original (casi imperceptible),
 // 4 = valor actual, 8 = recorridos muy amplios, 0 = quietos. Debe ser un número mayor o igual que 0.
