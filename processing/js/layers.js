@@ -1172,7 +1172,7 @@ function tetrahedronProjectionMetrics(width, height, progress) {
 }
 
 function drawCentralOctagon(cx, cy, progress, pulse) {
-  const r = Math.min(W, H) * 0.168;
+  const r = Math.min(W, H) * OCTAGON_RADIUS_FACTOR;
   const rot = progress * TAU * 0.18;
   const pulseStroke = 1 + pulse * 0.72;
   // Mini: the octagon's line is exactly MINI_POLYGON_STROKE_PX thick (as thin as raphael's hexadecagon); its

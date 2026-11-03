@@ -28,7 +28,17 @@ let sprites = null;
 // No zoom UI on the wallpaper (html-wallpaper-demo D2): kept as a constant only because
 // layers.js/sprites.js still read it by name (visibleCanvasBounds, perspectiveRayEndpoint, the
 // scene's own render() zoom transform, drawFailureBandIntersections' band scale).
-const viewZoom = 1;
+// Updated every frame by sceneViewZoom() (js/main.js) so the central octagon matches Raphael's
+// golden hexadecagon size; 1 until the first frame and always 1 in the mini.
+let viewZoom = 1;
+
+// Central octagon radius as a fraction of min(W, H) (js/layers.js drawCentralOctagon).
+const OCTAGON_RADIUS_FACTOR = 0.168;
+// Mirrors raphael/js/config.js GLYPH_SYSTEM_OUTER_MARGIN_PX and GLYPH_RING_BLUE_OUTER_FACTOR, which
+// size Raphael's hexadecagon: r = (min(W, H) / 2 - margin) / factor (raphael/js/hexadecagon.js
+// wallpaperCoreRadius). Keep them in sync with Raphael so both central polygons stay the same size.
+const RAPHAEL_GLYPH_SYSTEM_OUTER_MARGIN_PX = 50;
+const RAPHAEL_GLYPH_RING_BLUE_OUTER_FACTOR = 2.35;
 
 // Tiempo total (en segundos) que la animación avanza antes de invertirse (ping-pong); el ciclo
 // completo dura el doble: ida + regreso. Alargarlo NO hace más lenta la animación: la repite más
@@ -164,7 +174,8 @@ const SOFT_OVAL_SIZE_FACTOR = 0.25;
 // Caps viewport-only oval-axis stretching without changing each field's intentional rx/ry shape.
 // 1 keeps the viewport contribution circular; larger values allow up to that horizontal:vertical
 // (or vertical:horizontal) stretch before capping. Must be a finite number greater than or equal to 1.
-const SOFT_OVAL_VIEWPORT_AXIS_STRETCH_CAP = 1.35;
+// 1: wide/ultrawide viewports no longer stretch the soft ovals horizontally.
+const SOFT_OVAL_VIEWPORT_AXIS_STRETCH_CAP = 1;
 // Multiplicador del movimiento de los círculos/óvalos verdes y azules configurados: cuánto se alejan al girar
 // alrededor de su posición y cuánto se inclinan. 1 = movimiento original (casi imperceptible),
 // 4 = valor actual, 8 = recorridos muy amplios, 0 = quietos. Debe ser un número mayor o igual que 0.

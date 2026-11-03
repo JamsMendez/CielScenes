@@ -94,8 +94,21 @@ function animationProgress(ms) {
   return pingpong01((ms / 1000) / ONE_WAY_DURATION) * (ONE_WAY_DURATION / ANIMATION_CYCLE_DURATION);
 }
 
+// Wallpaper zoom that makes the central octagon (OCTAGON_RADIUS_FACTOR * minD) as large as Raphael's
+// hexadecagon. Raphael's radius keeps a fixed pixel margin, so the ratio depends on the viewport.
+// The mini keeps 1: its octagon already matches Raphael's mini hexadecagon.
+function sceneViewZoom(width = W, height = H) {
+  if (isMiniVariant) return 1;
+  const minD = Math.min(width, height);
+  const octagonRadius = minD * OCTAGON_RADIUS_FACTOR;
+  const hexadecagonRadius = (minD / 2 - RAPHAEL_GLYPH_SYSTEM_OUTER_MARGIN_PX) / RAPHAEL_GLYPH_RING_BLUE_OUTER_FACTOR;
+  // Raphael falls back to the same 0.168 * minD radius on tiny viewports (HEXADECAGON_FALLBACK_RADIUS_FACTOR).
+  return octagonRadius > 0 && hexadecagonRadius > 0 ? hexadecagonRadius / octagonRadius : 1;
+}
+
 var drawReadyAttempted = false;
 function render(ms) {
+  viewZoom = sceneViewZoom();
   var cx = W * 0.505;
   var cy = H * 0.515;
   var workStart = cadence.begin();

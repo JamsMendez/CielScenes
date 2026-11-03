@@ -110,7 +110,7 @@ function paintSoftOval(g, k, field) {
 // exact baking approach with its own independent size/blur factors, so it never shifts the
 // original soft ovals' established look.
 function paintCircularOval(g, k, field) {
-  const viewportAxes = softOvalViewportAxes();
+  const viewportAxes = circularOvalViewportAxes();
   const rx = viewportAxes.x * field.rx * k;
   const ry = viewportAxes.y * field.ry * k;
   const glow = g.createRadialGradient(0, 0, 0, 0, 0, Math.max(rx, ry));
@@ -367,6 +367,7 @@ function buildSprites() {
   // Linux mini optimization end.
   const haloReference = W * HALO_REFERENCE_WIDTH_FACTOR;
   const softOvalViewportSize = softOvalViewportAxes();
+  const circularOvalViewportSize = circularOvalViewportAxes();
   // RAP-26: every ring glyph is fit (glyphRingFitScale) to the SAME target width/height derived
   // from the annulus thickness alone; count is derived SECOND, from how many (glyph + gap) fit the
   // ring's own circumference (glyphRingCountForRing) — never the other way round (see
@@ -381,7 +382,7 @@ function buildSprites() {
       bakeSprite(softOvalViewportSize.x * field.rx * SOFT_OVAL_SIZE_FACTOR + field.blur * SOFT_OVAL_BLUR_FACTOR * 3, softOvalViewportSize.y * field.ry * SOFT_OVAL_SIZE_FACTOR + field.blur * SOFT_OVAL_BLUR_FACTOR * 3, (g, k) => paintSoftOval(g, k, field))
     ),
     circularOvals: CIRCULAR_OVAL_FIELDS.map((field) =>
-      bakeSprite(softOvalViewportSize.x * field.rx + field.blur * CIRCULAR_OVAL_BLUR_FACTOR * 3, softOvalViewportSize.y * field.ry + field.blur * CIRCULAR_OVAL_BLUR_FACTOR * 3, (g, k) => paintCircularOval(g, k, field))
+      bakeSprite(circularOvalViewportSize.x * field.rx + field.blur * CIRCULAR_OVAL_BLUR_FACTOR * 3, circularOvalViewportSize.y * field.ry + field.blur * CIRCULAR_OVAL_BLUR_FACTOR * 3, (g, k) => paintCircularOval(g, k, field))
     ),
     chromaRings: CHROMATIC_LOOP_GROUPS.map((loop) =>
       bakeRainbowRing(W * loop.rx, H * loop.ry, loop.width, CHROMATIC_RING_DIFFUSION)

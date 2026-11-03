@@ -237,11 +237,13 @@ const SOFT_OVAL_VISIBLE_ALPHA_CAP = 0.34;
 // A new, additional field of soft ovals: smaller and more circular than SOFT_OVAL_FIELDS above,
 // and more numerous. Generated the same way SOFT_OVAL_FIELDS' extra (beyond-the-original-12)
 // entries are: a low-discrepancy position plus an isolated per-index seed, never the shared rnd().
-const CIRCULAR_OVAL_FIELD_COUNT = 36;
+const CIRCULAR_OVAL_FIELD_COUNT = 72;
 // Máxima diferencia permitida entre rx/ry y 1 (0 = círculo perfecto). Debe ser un número >= 0.
 const CIRCULAR_OVAL_ASPECT_TOLERANCE = 0.05;
 const CIRCULAR_OVAL_SIZE_FACTOR = 0.05;
-const CIRCULAR_OVAL_BLUR_FACTOR = 0.10;
+// Blur multiplier for the circular ovals' `blur` (10-19). 0.45 keeps the blur at ~11% of each
+// oval's radius, the same soft, faded edge ratio as SOFT_OVAL_FIELDS (blur 43-50 x 0.15).
+const CIRCULAR_OVAL_BLUR_FACTOR = 0.45;
 const CIRCULAR_OVAL_MOTION_FACTOR = 6;
 const CIRCULAR_OVAL_BREATH_FACTOR = 1.4;
 const CIRCULAR_OVAL_VISIBLE_ALPHA_MULTIPLIER = 2.0;
