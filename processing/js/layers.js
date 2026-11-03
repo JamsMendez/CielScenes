@@ -1008,89 +1008,77 @@ function drawSegmentedSphere(cx, cy, progress) {
   ctx.restore();
 }
 
-function orbitBlockState(cx, cy, phase, block) {
-  const ring = ORBIT_BLOCK_RINGS[block.ring];
-  const angle = block.phase + phase * ORBIT_BLOCK_RING_SPEEDS[block.ring];
-  const baseR = Math.min(W, H) * 0.205;
-  const rx = baseR * ring.radiusX * block.radialJitter;
-  const ry = baseR * ring.radiusY * block.radialJitter;
-  const localX = Math.cos(angle) * rx;
-  const localY = Math.sin(angle) * ry;
-  const planeCos = Math.cos(ring.planeTilt);
-  const planeSin = Math.sin(ring.planeTilt);
-  const front = 0.5 + 0.5 * Math.sin(angle);
+// Circular orbit around the central octagon, seen face-on: every square has the same size and opacity
+// (no depth) and keeps one side facing the centre. On a circle equal angles are equal arcs, so at
+// ORBIT_BLOCK_SIZE_SCALE = 1 the gap between neighbours equals one square exactly, at any viewport size and
+// block count; smaller scales shrink the squares and widen the gap. Sizes follow min(W, H) like the octagon,
+// so no separate wallpaper or mini scale is applied.
+const ORBIT_BLOCK_OPACITY = 0.70;
+// Eye distance for the inward tilt's perspective, in square sides: smaller values exaggerate the taper.
+const ORBIT_BLOCK_PERSPECTIVE = 2.5;
+
+// Square side relative to the orbit radius: half of the arc between neighbours, times ORBIT_BLOCK_SIZE_SCALE.
+function orbitBlockSideRatio() {
+  return TAU / ORBIT_BLOCK_COUNT / 2 * ORBIT_BLOCK_SIZE_SCALE;
+}
+
+// Each square is tilted ORBIT_BLOCK_TILT_DEGREES about its tangential axis, its outer side leaning away from
+// the viewer, and projected with a simple perspective. All values are fractions of the side, so the shape
+// is identical at any size. In the block frame +x points away from the centre: the inner side sits at
+// x = -innerX (half-width innerHalf), the outer side at x = outerX (half-width outerHalf).
+function orbitBlockTiltShape() {
+  const tilt = ORBIT_BLOCK_TILT_DEGREES * Math.PI / 180;
+  const depth = 0.5 * Math.sin(tilt);
+  const half = 0.5 * Math.cos(tilt);
+  const innerScale = ORBIT_BLOCK_PERSPECTIVE / (ORBIT_BLOCK_PERSPECTIVE - depth);
+  const outerScale = ORBIT_BLOCK_PERSPECTIVE / (ORBIT_BLOCK_PERSPECTIVE + depth);
   return {
-    x: cx + localX * planeCos - localY * planeSin,
-    y: cy + localX * planeSin + localY * planeCos,
-    angle,
-    front,
-    size: structurePx(block.size, 1.5) * (0.90 + front * 0.74),
-    opacity: 0.50 + front * 0.40,
-    rotation: angle + ring.planeTilt + block.tilt,
+    innerX: half * innerScale,
+    innerHalf: 0.5 * innerScale,
+    outerX: half * outerScale,
+    outerHalf: 0.5 * outerScale,
   };
 }
 
-// Linux mini optimization begin (O2): orbitBlockState returns a new object per block and frame (32 per
-// frame). Mini evaluates the same expressions inline; the call stream is identical to the reference
-// except the fill colour, which comes from the O2b alpha table.
-// Wallpaper scaling (odd/tasks/scene-wallpaper-scaling.md T1): the block sizes (7-19 px) and their glow blur are
-// absolute px tuned on a >= 1080 px short side, while the ring radius follows min(W, H). The wallpaper scales each
-// block's local frame by k = min(1, min(W, H) / 1080) after its rotate, so the block and its glow sprite (same
-// bucket, same blur, stamped in that frame) shrink together; at >= 1080 and in mini (structurePx already scales
-// there) k is 1 and no scale call is made, so those streams stay exactly as before.
-function drawMiniOrbitBlocks(cx, cy, phase) {
-  const wallpaperBlockScale = isMiniVariant ? 1 : Math.min(1, Math.min(W, H) / 1080);
-  ctx.save();
-  for (let i = 0; i < orbitBlocks.length; i++) {
-    const block = orbitBlocks[i];
-    // orbitBlockState(cx, cy, phase, block)
-    const ring = ORBIT_BLOCK_RINGS[block.ring];
-    const angle = block.phase + phase * ORBIT_BLOCK_RING_SPEEDS[block.ring];
-    const baseR = Math.min(W, H) * 0.205;
-    const rx = baseR * ring.radiusX * block.radialJitter;
-    const ry = baseR * ring.radiusY * block.radialJitter;
-    const localX = Math.cos(angle) * rx;
-    const localY = Math.sin(angle) * ry;
-    const planeCos = Math.cos(ring.planeTilt);
-    const planeSin = Math.sin(ring.planeTilt);
-    const front = 0.5 + 0.5 * Math.sin(angle);
-    const x = cx + localX * planeCos - localY * planeSin;
-    const y = cy + localX * planeSin + localY * planeCos;
-    const size = structurePx(block.size, 1.5) * (0.90 + front * 0.74);
-    const opacity = 0.50 + front * 0.40;
-    const rotation = angle + ring.planeTilt + block.tilt;
-
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(rotation);
-    if (wallpaperBlockScale !== 1) ctx.scale(wallpaperBlockScale, wallpaperBlockScale);
-    ctx.fillStyle = layerRgba(MINI_ORBIT_BLOCK_RGBA, opacity);
-    stampGlow('orbit-block', size * 1.64, size * 1.08, ORBIT_BLOCK_GLOW_ALPHA * opacity);
-    ctx.globalAlpha = 1;
-    ctx.fillRect(-size * 0.82, -size * 0.54, size * 1.64, size * 1.08);
-    ctx.restore();
-  }
-  ctx.restore();
+// Orbit radius whose squares' inner side sits ORBIT_BLOCK_OCTAGON_GAP * octagon radius outside the octagon's
+// visible outer edge (octagonVisibleOuterRadius), so the clearance looks the same in mini and at any display
+// size and the squares never touch the line, even at full pulse. Solves R - side(R) * innerX = edge + gap.
+function orbitBlockRadius(shape) {
+  const r = Math.min(W, H) * OCTAGON_RADIUS_FACTOR;
+  const innerEdge = octagonVisibleOuterRadius(r) + r * ORBIT_BLOCK_OCTAGON_GAP;
+  return innerEdge / (1 - orbitBlockSideRatio() * shape.innerX);
 }
 
-// Linux mini optimization end.
 function drawOrbitBlocks(cx, cy, phase) {
-  // Linux mini optimization begin (O2): see drawMiniOrbitBlocks (B5: the wallpaper too, so the reference
-  // body below is kept only as the CielWin text it replaces).
-  drawMiniOrbitBlocks(cx, cy, phase);
-  return;
-  // Linux mini optimization end.
+  if (ORBIT_BLOCK_COUNT === 0) return;
+  const shape = orbitBlockTiltShape();
+  const radius = orbitBlockRadius(shape);
+  const side = radius * orbitBlockSideRatio();
+  const innerX = -shape.innerX * side;
+  const innerHalf = shape.innerHalf * side;
+  const outerX = shape.outerX * side;
+  const outerHalf = shape.outerHalf * side;
+  const glowWidth = outerX - innerX;
+  const glowHeight = 2 * innerHalf;
+  const glowShift = (outerX + innerX) / 2;
   ctx.save();
-  for (const block of orbitBlocks) {
-    const state = orbitBlockState(cx, cy, phase, block);
-
+  ctx.fillStyle = layerRgba(MINI_ORBIT_BLOCK_RGBA, ORBIT_BLOCK_OPACITY);
+  for (let i = 0; i < orbitBlocks.length; i++) {
+    const angle = orbitBlocks[i].phase + phase * ORBIT_BLOCK_SPEED;
     ctx.save();
-    ctx.translate(state.x, state.y);
-    ctx.rotate(state.rotation);
-    ctx.fillStyle = `rgba(255,252,238,${state.opacity})`;
-    stampGlow('orbit-block', state.size * 1.64, state.size * 1.08, ORBIT_BLOCK_GLOW_ALPHA * state.opacity);
+    ctx.translate(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+    ctx.rotate(angle);
+    ctx.translate(glowShift, 0);
+    stampGlow('orbit-block', glowWidth, glowHeight, ORBIT_BLOCK_GLOW_ALPHA * ORBIT_BLOCK_OPACITY);
+    ctx.translate(-glowShift, 0);
     ctx.globalAlpha = 1;
-    ctx.fillRect(-state.size * 0.82, -state.size * 0.54, state.size * 1.64, state.size * 1.08);
+    ctx.beginPath();
+    ctx.moveTo(innerX, -innerHalf);
+    ctx.lineTo(outerX, -outerHalf);
+    ctx.lineTo(outerX, outerHalf);
+    ctx.lineTo(innerX, innerHalf);
+    ctx.closePath();
+    ctx.fill();
     ctx.restore();
   }
   ctx.restore();
@@ -1171,13 +1159,36 @@ function tetrahedronProjectionMetrics(width, height, progress) {
   return result;
 }
 
+// Central octagon geometry shared with the orbit blocks, which keep clear of its visible outer edge.
+// Stroke growth at full pulse (lineWidth * (1 + pulse * gain)).
+const OCTAGON_PULSE_STROKE_GAIN = 0.72;
+// Largest radial vertex wobble at full pulse, relative to the radius.
+const OCTAGON_PULSE_WOBBLE = 0.025;
+// Chroma copies: stroke width and sideways offset in full-scene px (mini scales both by miniK).
+const OCTAGON_CHROMA_STROKE_PX = 6.8;
+const OCTAGON_CHROMA_OFFSET_PX = 2.1;
+
+function octagonMiniStrokeK() {
+  return isMiniVariant ? MINI_POLYGON_STROKE_PX / 5.1 : 1;
+}
+
+// Farthest the octagon's drawn line reaches from the centre (vertex + full-pulse wobble + half the widest
+// stroke + chroma offset), ignoring the soft glow. The strokes are fixed px while the radius follows
+// min(W, H), so this edge sits relatively farther out on small viewports.
+function octagonVisibleOuterRadius(r) {
+  const k = octagonMiniStrokeK();
+  return r * (1 + OCTAGON_PULSE_WOBBLE)
+    + OCTAGON_CHROMA_STROKE_PX * k * (1 + OCTAGON_PULSE_STROKE_GAIN) / 2
+    + OCTAGON_CHROMA_OFFSET_PX * k;
+}
+
 function drawCentralOctagon(cx, cy, progress, pulse) {
   const r = Math.min(W, H) * OCTAGON_RADIUS_FACTOR;
   const rot = progress * TAU * 0.18;
-  const pulseStroke = 1 + pulse * 0.72;
+  const pulseStroke = 1 + pulse * OCTAGON_PULSE_STROKE_GAIN;
   // Mini: the octagon's line is exactly MINI_POLYGON_STROKE_PX thick (as thin as raphael's hexadecagon); its
   // chroma copies, offsets and glow keep their full-scene proportions to that stroke.
-  const miniK = isMiniVariant ? MINI_POLYGON_STROKE_PX / 5.1 : 1;
+  const miniK = octagonMiniStrokeK();
   const pulseBlur = (20 + pulse * 18) * miniK;
   ctx.save();
   ctx.translate(cx, cy);
@@ -1186,15 +1197,15 @@ function drawCentralOctagon(cx, cy, progress, pulse) {
   ctx.lineJoin = 'round';
 
   for (const [offset, color] of [
-    [-2.1 * miniK, 'rgba(40,220,255,0.20)'],
-    [ 2.1 * miniK, 'rgba(255,72,120,0.16)'],
+    [-OCTAGON_CHROMA_OFFSET_PX * miniK, 'rgba(40,220,255,0.20)'],
+    [ OCTAGON_CHROMA_OFFSET_PX * miniK, 'rgba(255,72,120,0.16)'],
   ]) {
     ctx.strokeStyle = color;
-    ctx.lineWidth = 6.8 * miniK * pulseStroke;
+    ctx.lineWidth = OCTAGON_CHROMA_STROKE_PX * miniK * pulseStroke;
     ctx.beginPath();
     for (let i = 0; i < 8; i++) {
       const a = -Math.PI / 2 + i * TAU / 8;
-      const wobble = pulse * r * 0.025 * Math.sin(a * 3 + progress * TAU);
+      const wobble = pulse * r * OCTAGON_PULSE_WOBBLE * Math.sin(a * 3 + progress * TAU);
       const x = Math.cos(a) * (r + wobble) + offset;
       const y = Math.sin(a) * (r + wobble);
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
@@ -1208,7 +1219,7 @@ function drawCentralOctagon(cx, cy, progress, pulse) {
   // under the ctx rotation) and strokes the octagon below unshadowed. The pulse wobble (at most 2.5% of
   // the radius, inside a 19-38 px blur) moves the stroke only, not its baked glow.
   const octagonGlow = isMiniVariant ? null : wallpaperPulseGlows(`octagon|${r}`, (level, scale) => {
-    const lineWidth = 5.1 * (1 + level * 0.72);
+    const lineWidth = 5.1 * (1 + level * OCTAGON_PULSE_STROKE_GAIN);
     return bakeShadowLayer(r + lineWidth, r + lineWidth, scale, 'rgba(255,255,245,0.90)', 20 + level * 18, (g) => {
       g.lineCap = 'round';
       g.lineJoin = 'round';
@@ -1230,7 +1241,7 @@ function drawCentralOctagon(cx, cy, progress, pulse) {
     ctx.beginPath();
     for (let i = 0; i < 8; i++) {
       const a = -Math.PI / 2 + i * TAU / 8;
-      const wobble = pulse * r * 0.025 * Math.sin(a * 3 + progress * TAU);
+      const wobble = pulse * r * OCTAGON_PULSE_WOBBLE * Math.sin(a * 3 + progress * TAU);
       const x = Math.cos(a) * (r + wobble);
       const y = Math.sin(a) * (r + wobble);
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
@@ -1248,7 +1259,7 @@ function drawCentralOctagon(cx, cy, progress, pulse) {
   ctx.beginPath();
   for (let i = 0; i < 8; i++) {
     const a = -Math.PI / 2 + i * TAU / 8;
-    const wobble = pulse * r * 0.025 * Math.sin(a * 3 + progress * TAU);
+    const wobble = pulse * r * OCTAGON_PULSE_WOBBLE * Math.sin(a * 3 + progress * TAU);
     const x = Math.cos(a) * (r + wobble);
     const y = Math.sin(a) * (r + wobble);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);

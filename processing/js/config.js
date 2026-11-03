@@ -61,13 +61,24 @@ const OCTAGON_PULSE_DURATION = 1;
 // El valor es el número de vueltas por cada tramo de ida (ver ONE_WAY_DURATION):
 // 1 = una vuelta, 2 = el doble de rápido, 0.5 = la mitad, 0 = detenida y negativo = gira al revés.
 const FOLDING_BAND_SPEEDS = [3, -3, 3]; // [outer, middle, inner]
-// Rectángulos por cada anillo que orbita el octágono, en orden [exterior, interior].
-// Cada valor debe ser un entero no negativo: 0 oculta ese anillo; [25, 25] conserva los 50 bloques actuales.
-const ORBIT_BLOCK_RING_COUNTS = [16, 16]; // [outer, inner]
-// Velocidad de cada anillo de rectángulos, en orden [exterior, interior]. Los valores finitos
-// admiten decimales: 1 = una vuelta por tramo de ida, 0.5 = media vuelta, 0 = detenido y
-// los valores negativos invierten el sentido (-2 = dos vueltas en sentido contrario).
-const ORBIT_BLOCK_RING_SPEEDS = [2, -2]; // [outer, inner]
+// Cuadrados de la órbita circular que rodea al octágono, vista de frente (plana, sin profundidad).
+// Debe ser un entero no negativo: 0 oculta la órbita.
+const ORBIT_BLOCK_COUNT = 24;
+// Escala del tamaño de los cuadrados, relativa al tamaño en que el hueco entre vecinos mide lo
+// mismo que un cuadrado. 1 = hueco igual al cuadrado, 0.75 = cuadrados un 25% más chicos (el hueco
+// crece), valores mayores que 1 los agrandan. Debe ser mayor que 0.
+const ORBIT_BLOCK_SIZE_SCALE = 0.75;
+// Aire entre el borde visible del octágono (su línea en el pico del pulso) y el lado interior de los
+// cuadrados, relativo al radio del octágono. Se ve igual en la mini y en cualquier pantalla:
+// 0 = rozando la línea, 0.02 = un 2% del radio, valores mayores alejan la órbita. No debe ser negativo.
+const ORBIT_BLOCK_OCTAGON_GAP = 0.02;
+// Inclinación de los cuadrados hacia el octágono, en grados: cada uno se ve como una placa acostada
+// hacia el centro (lado de afuera más angosto, achatado hacia adentro). 0 = planos de frente; valores
+// chicos (15 a 30) dan una inclinación leve. Debe estar entre 0 y 80.
+const ORBIT_BLOCK_TILT_DEGREES = 25;
+// Velocidad de la órbita. Los valores finitos admiten decimales: 1 = una vuelta por tramo de ida,
+// 0.5 = media vuelta, 0 = detenida y los valores negativos invierten el sentido.
+const ORBIT_BLOCK_SPEED = 2.5;
 // Velocidad de giro del tetraedro (pirámide triangular) central, en vueltas por tramo de ida.
 // 1 = normal, 2 = el doble, 0 = sin girar y negativo = gira al revés. No cambia su
 // acercamiento/alejamiento, que es independiente.
@@ -197,7 +208,7 @@ const FOREGROUND_INCLINED_RAY_SPEED = 5;
 // de sombra por lote sin conectar rayos independientes entre sí.
 const FOREGROUND_INCLINED_RAY_BATCH_SIZE = 128;
 // mini-scene-window T2l: the structure's radii already follow min(W, H) (bands minD*0.385, orbit blocks
-// minD*0.205, octagon minD*0.168, ...), but its stroke widths, glow blurs and orbit block sizes are absolute
+// just outside the octagon edge, octagon minD*0.168, ...), but its stroke widths, glow blurs and orbit block sizes were absolute
 // px tuned on the real screen (3440x1440, short side 1440). In the ?variant=mini window those px are ~5x too
 // big for the ~5x smaller structure (thick, glowing bands and 7-19px orbit squares). In mini every fixed px
 // value goes through structurePx(): scaled by min(W, H) / 1440 with a small floor so hairlines never vanish.
@@ -218,13 +229,6 @@ function structurePx(px, floor = 0) {
 // proportional widths rather than structurePx, because the widths are minD-relative already (not fixed px).
 const MINI_FOLDING_BAND_WIDTH_FACTOR = 0.35;
 
-const ORBIT_BLOCK_RING_COUNT = 2;
-const ORBIT_BLOCK_COUNT = ORBIT_BLOCK_RING_COUNTS.reduce((total, count) => total + count, 0);
-
-const ORBIT_BLOCK_RINGS = [
-  { radiusX: 1.16, radiusY: 0.64, planeTilt: -0.46 },
-  { radiusX: 0.78, radiusY: 1.08, planeTilt: 0.58 },
-];
 
 // --- Nebula (WebGL background) tuning ---------------------------------------
 // Consolidated from js/nebula.js: pure tuning literals with no runtime-state
