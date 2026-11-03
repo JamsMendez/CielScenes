@@ -143,6 +143,7 @@ function render(ms) {
     drawOrbitBlocks(cx, cy, phase);
     drawCentralOctagon(cx, cy, p, pulse);
     drawTriangularPrism(cx, cy, p);
+    drawAtomicOrbitsFront(cx, cy, p);
     drawPerspectiveRays(cx, cy, phase);
     drawCentralCore(cx, cy, phase);
     ctx.restore();

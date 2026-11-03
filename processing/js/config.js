@@ -57,10 +57,25 @@ const OCTAGON_PULSE_INTERVAL = 3;
 const OCTAGON_PULSE_DURATION = 1;
 
 // User tuning: signed finite values control speed; zero pauses and negative values reverse motion.
-// Velocidad de cada banda blanca plegable, en orden [exterior, media, interior].
+// Velocidad de cada banda blanca plegable, en orden [exterior, interior].
 // El valor es el número de vueltas por cada tramo de ida (ver ONE_WAY_DURATION):
 // 1 = una vuelta, 2 = el doble de rápido, 0.5 = la mitad, 0 = detenida y negativo = gira al revés.
-const FOLDING_BAND_SPEEDS = [3, -3, 3]; // [outer, middle, inner]
+const FOLDING_BAND_SPEEDS = [1.5, -1.5]; // [outer, inner]
+// Elasticidad de las bandas: cuánto se doblan (en forma de silla de montar) y se estiran mientras
+// giran, como una goma. 0 = anillos rígidos, 1 = valor actual, 2 = el doble. No debe ser negativo.
+const RUBBER_BAND_DEFORM_STRENGTH = 1;
+// Las bandas se voltean sin parar (como una moneda girando) y se doblan como una goma. Cada
+// volteo va a velocidad constante (ver BAND_SPEED_VARIATION) y nunca se detiene.
+// Segundos que dura cada volteo. Mayor que 0.
+const BAND_TUMBLE_SECONDS = 60;
+// Segundos de pausa entre volteos. 0 = sin pausa, siempre en movimiento.
+const BAND_CALM_SECONDS = 0;
+// Cuánto varía la velocidad del volteo: 0 = velocidad constante, 0.6 = acelera y frena sin llegar a
+// detenerse. Debe estar entre 0 y menos de 1 (con 1 se detendría un instante).
+const BAND_SPEED_VARIATION = 0;
+// Cuánta profundidad 3D (inclinación, doblez, cinta de canto) conservan las bandas en el momento
+// más quieto del ciclo: 0 = se ven planas de frente, 1 = siempre igual de dobladas. Entre 0 y 1.
+const BAND_REST_DEPTH = 0.6;
 // Cuadrados de la órbita circular que rodea al octágono, vista de frente (plana, sin profundidad).
 // Debe ser un entero no negativo: 0 oculta la órbita.
 const ORBIT_BLOCK_COUNT = 24;
@@ -82,7 +97,7 @@ const ORBIT_BLOCK_SPEED = 2.5;
 // Velocidad de giro del tetraedro (pirámide triangular) central, en vueltas por tramo de ida.
 // 1 = normal, 2 = el doble, 0 = sin girar y negativo = gira al revés. No cambia su
 // acercamiento/alejamiento, que es independiente.
-const TRIANGULAR_PRISM_ROTATION_SPEED = 12;
+const TRIANGULAR_PRISM_ROTATION_SPEED = 9.6;
 // User tuning for the seeded background particle layer.
 // Multiplicador de la velocidad de las partículas (estrellas) del fondo.
 // 1 = velocidad base, 2 = el doble (valor actual), 0.5 = la mitad, 0 = partículas quietas y
