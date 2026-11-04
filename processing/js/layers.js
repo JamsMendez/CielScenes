@@ -131,21 +131,34 @@ function foldingBandGeometry(rx, ry, width, foldPhase, deform) {
 // looks cut into pieces) and the ring's axis precesses. Every motion runs at constant speed, with no
 // easing or rebound:
 // - precession (roll) and the travelling twist advance at a constant angular rate;
-// - contraction/expansion is a triangle wave in the ring's visible height, cos(tilt), so it shrinks
-//   and grows at a constant rate (a linear tilt would look slow near the wide ring and fast near the
-//   ellipse);
-// - the turn-over (flip) grows linearly with the contraction, from 0 in the nested pose to restFlip;
+// - the main turn is about the vertical axis (flip), like a spinning coin, as in the anime reference
+//   (E:/Anime/Files/TGIRPLuo_LdiFOSy.mp4 ~1:05.5-1:07.5): each ring closes into a tall, narrow,
+//   nearly edge-on oval and opens back face-on, the inner one ahead of the outer one;
+// - contraction/expansion is a triangle wave: the turn (flip) is linear in it. Do not make the
+//   visible width cos(flip) linear instead: acos near 1 has an infinite slope, so the ring would
+//   whip out of the face-on pose. The small tilt about the horizontal axis keeps its height linear
+//   (its rest height is below 1, so its slope stays finite);
 // - torsion is a triangle wave too, a quarter circuit ahead of the contraction.
 // A face-on ring is a circle, so the precession never breaks the nested pose.
-// Tilt (about the screen x axis) of the ellipse at full contraction.
-const BAND_ELLIPSE_TILT = 1.05;
+// Tilt (about the screen x axis) at full contraction; small, so the closed ring is a tall oval.
+const BAND_ELLIPSE_TILT = 0.35;
 
 const BAND_REST_DEFORM = { flip: 0, tilt: 0, roll: 0, bend: 0, bendAngle: 0, lean: 0, twistAmp: 0, travel: 0 };
 
 // 0 at u = 0, 1 at u = 0.5, back to 0 at u = 1; constant slope.
+// Near each turnaround (0 and 1) the straight slope is replaced by a parabola over
+// BAND_TURNAROUND_FRACTION of the range, so the motion slows into the reversal instead of flipping
+// direction in one frame (the whip at the start of every circuit); the rest stays linear.
 function bandTriangleWave(u) {
   const f = u - Math.floor(u);
-  return 1 - Math.abs(2 * f - 1);
+  const t = 1 - Math.abs(2 * f - 1);
+  const k = BAND_TURNAROUND_FRACTION;
+  if (k <= 0) return t;
+  let g;
+  if (t < k) g = k / 2 + (t * t) / (2 * k);
+  else if (t > 1 - k) g = 1 - k / 2 - ((1 - t) * (1 - t)) / (2 * k);
+  else g = t;
+  return (g - k / 2) / (1 - k);
 }
 
 function rubberBandDeformation(phase, spin, band) {
@@ -155,8 +168,8 @@ function rubberBandDeformation(phase, spin, band) {
   const strength = RUBBER_BAND_DEFORM_STRENGTH;
   const direction = spin < 0 ? -1 : 1;
 
-  const contraction = bandTriangleWave(cycles);
-  const torsion = bandTriangleWave(cycles + 0.25);
+  const contraction = bandTriangleWave(cycles + band.lead);
+  const torsion = bandTriangleWave(cycles + band.lead + 0.25);
   // Visible height goes linearly from the nested pose's (band.tilt, nearly flat) to the ellipse's
   // and back.
   const restHeight = Math.cos(band.tilt);
@@ -1494,12 +1507,13 @@ function drawTriangularPrism(cx, cy, progress) {
 // Band shapes: radius and ribbon half-width (fractions of min(W, H)), ribbon lean between flat (0)
 // and upright (pi / 2) and its travelling twist, the nested pose's slight tilt (its sign is also the
 // contraction's tilt direction), saddle bend (fraction of the radius), the turn about the screen y
-// axis at full contraction (restFlip) and the precession per circuit (precess, radians; sign =
-// direction). The different radii nest the rings when expanded; opposite tilts, flips, precessions
+// axis at full contraction (restFlip, near pi / 2 = edge-on) and the precession per circuit (precess,
+// radians; sign = direction), and how far ahead in the circuit the band runs (lead, fraction of a
+// circuit: the inner ring opens and closes slightly before the outer one). The different radii nest the rings when expanded; opposite tilts, flips, precessions
 // and different rot put them on different axes, so their ellipses cross when contracted.
 const FOLDING_BANDS = [
-  { radius: 0.32, width: 0.018, lean: 0.9, twistAmp: 0.9, tilt: 0.10, bend: 0.22, restFlip: 0.45, precess: 0.9, offset: 0.0, rot: -0.76 },
-  { radius: 0.245, width: 0.016, lean: 1.1, twistAmp: 0.6, tilt: -0.08, bend: 0.30, restFlip: -0.4, precess: -0.9, offset: 2.2, rot: 0.36 },
+  { radius: 0.32, width: 0.018, lean: 0.9, twistAmp: 0.9, tilt: 0.10, bend: 0.22, restFlip: 1.05, precess: 0.9, lead: 0, offset: 0.0, rot: -0.76 },
+  { radius: 0.245, width: 0.016, lean: 1.1, twistAmp: 0.6, tilt: -0.08, bend: 0.30, restFlip: -1.3, precess: -0.9, lead: 0.08, offset: 2.2, rot: 0.36 },
 ];
 
 function foldingBandParameters(progress) {
