@@ -69,6 +69,11 @@ const RUBBER_BAND_DEFORM_STRENGTH = 1;
 // (tramos de la cinta quedan de canto y casi desaparecen) y el eje gira (precesión).
 // Segundos que dura un circuito completo. Mayor que 0.
 const BAND_CIRCUIT_SECONDS = 4;
+// Suavizado de los giros del circuito (cuando el aro termina de expandirse o de contraerse y cambia
+// de sentido): fracción del recorrido que se redondea en cada extremo para que no haya latigazo.
+// 0 = cambio de sentido brusco, 0.15 = valor actual, 0.5 = casi todo el recorrido curvo.
+// Debe estar entre 0 y 0.5; el resto del recorrido mantiene la velocidad constante.
+const BAND_TURNAROUND_FRACTION = 0.15;
 // Cuadrados de la órbita circular que rodea al octágono, vista de frente (plana, sin profundidad).
 // Debe ser un entero no negativo: 0 oculta la órbita.
 const ORBIT_BLOCK_COUNT = 24;
