@@ -48,6 +48,22 @@ function sceneAlertTitleLimits(sceneW, sceneH) {
 // and the mini bake) instead of redrawing glyphs.js's stroke glyphs, which have other shapes and sizes, so the
 // letters show the ring exactly where it is drawn. The deeper title reach made the mismatch visible. Falls back
 // to the stroke ring below until the sprites are baked.
+// The blue ring's sprites (sprites.outlineGlyphs) are stamped the same way, at the same radius and rotation
+// drawGlyphRings uses for it, so the warning/failed letters show both the gold and the blue characters.
+function stampSeeThroughSpriteRing(g, spriteSet, cx, cy, radius, rotation) {
+  for (var i = 0; i < spriteSet.length; i++) {
+    var sprite = spriteSet[i];
+    // Same angle as glyph-rings.js's glyphRingSpriteAngle (kept inline: this hook only relies on what the scene
+    // passes it, see the stubbed hook check in CielWin's alert-title-reach.checks.js).
+    var angle = rotation + (sprite.ringAngle !== undefined ? sprite.ringAngle : (i / spriteSet.length) * TAU);
+    g.save();
+    g.translate(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+    g.rotate(glyphRingOrientationAngle(angle));
+    g.drawImage(sprite.canvas, -sprite.hw, -sprite.hh, sprite.hw * 2, sprite.hh * 2);
+    g.restore();
+  }
+}
+
 var sceneSeeThroughLayerStrokes = sceneSeeThroughLayer;
 sceneSeeThroughLayer = function (g, sceneW, sceneH, progress) {
   var spriteSet = sprites && sprites.outlineGlyphsGold;
@@ -60,16 +76,11 @@ sceneSeeThroughLayer = function (g, sceneW, sceneH, progress) {
   g.translate(cx, cy);
   g.scale(zoom, zoom);
   g.translate(-cx, -cy);
-  for (var i = 0; i < spriteSet.length; i++) {
-    var sprite = spriteSet[i];
-    // Same angle as glyph-rings.js's glyphRingSpriteAngle (kept inline: this hook only relies on what the scene
-    // passes it, see the stubbed hook check in CielWin's alert-title-reach.checks.js).
-    var angle = gold.rotation + (sprite.ringAngle !== undefined ? sprite.ringAngle : (i / spriteSet.length) * TAU);
-    g.save();
-    g.translate(cx + Math.cos(angle) * gold.radius, cy + Math.sin(angle) * gold.radius);
-    g.rotate(glyphRingOrientationAngle(angle));
-    g.drawImage(sprite.canvas, -sprite.hw, -sprite.hh, sprite.hw * 2, sprite.hh * 2);
-    g.restore();
+  stampSeeThroughSpriteRing(g, spriteSet, cx, cy, gold.radius, gold.rotation);
+  var blueSet = sprites.outlineGlyphs;
+  if (blueSet && blueSet.length > 0) {
+    var blue = glyphRingAnnuli(coreRadius(Math.min(sceneW, sceneH)))[3];
+    stampSeeThroughSpriteRing(g, blueSet, cx, cy, (blue.innerRadius + blue.outerRadius) / 2, progress * TAU * GLYPH_RING_BLUE_ROTATION_SPEED);
   }
   g.restore();
 };
