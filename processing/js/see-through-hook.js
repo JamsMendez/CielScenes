@@ -42,5 +42,53 @@ function sceneSeeThroughLayer(g, sceneW, sceneH, progress) {
     fillFoldingBandGeometry(g, foldingBandGeometry(rx, ry, width, foldPhase, deform), "rgb(255,255,255)");
     g.restore();
   }
+  drawSeeThroughSpherePieces(g, Math.min(sceneW, sceneH), progress);
   g.restore();
+}
+
+// The segmented sphere's rectangles (js/layers.js's drawMiniSegmentedSphere, which both the wallpaper and mini
+// draw) shown through the letters too: same descriptors, positions, rotations, sizes, line widths and alphas
+// (js/sphere.js's miniSegmentedSphereFrame/miniSegmentedSpherePieceState), drawn in plain white into the hook's
+// context, which is already translated to the scene center and scaled by viewZoom. The glow stamps are left out:
+// they draw on the scene's own `ctx`, and the overlay recolors the letters to one alert color anyway.
+function drawSeeThroughSpherePieces(g, minD, progress) {
+  var frame = miniSegmentedSphereFrame(progress);
+  for (var i = 0; i < SEGMENTED_SPHERE_DESCRIPTORS.length; i++) {
+    var descriptor = SEGMENTED_SPHERE_DESCRIPTORS[i];
+    var state = miniSegmentedSpherePieceState(frame, descriptor);
+    var d = segmentedSpherePieceDimensions(descriptor, minD, state.projectedDepth);
+    var left = -d.width / 2, top = -d.height / 2;
+    g.save();
+    g.translate(state.normalizedPositionX * minD, state.normalizedPositionY * minD);
+    g.rotate(state.rotation);
+    if (descriptor.style === "solid-square") {
+      g.fillStyle = "rgba(255,255,255," + (SOLID_SQUARE_SPHERE_ALPHA - state.travel * 0.10) * state.depthAlpha + ")";
+      g.fillRect(left, top, d.width, d.height);
+      g.strokeStyle = "rgba(255,255,255," + SOLID_SQUARE_SPHERE_STROKE_ALPHA * state.depthAlpha + ")";
+      g.lineWidth = structurePx(1.0, 0.5);
+      g.strokeRect(left, top, d.width, d.height);
+    } else if (descriptor.style === "outline-rectangle") {
+      g.strokeStyle = "rgba(255,255,255," + (OUTLINE_RECTANGLE_SPHERE_STROKE_ALPHA - state.travel * 0.16) * state.depthAlpha + ")";
+      g.lineWidth = structurePx(0.8, 0.5);
+      g.strokeRect(left, top, d.width, d.height);
+    } else {
+      var grid = griddedRectangleInternalLineCoordinates(d);
+      g.fillStyle = "rgba(255,255,255," + (GRIDDED_RECTANGLE_SPHERE_FILL_ALPHA - state.travel * 0.08) * state.depthAlpha + ")";
+      g.fillRect(left, top, d.width, d.height);
+      g.strokeStyle = "rgba(255,255,255," + (GRIDDED_RECTANGLE_SPHERE_STROKE_ALPHA - state.travel * 0.12) * state.depthAlpha + ")";
+      g.lineWidth = structurePx(0.72, 0.5);
+      g.strokeRect(left, top, d.width, d.height);
+      g.beginPath();
+      for (var v = 0; v < grid.vertical.length; v++) {
+        g.moveTo(grid.vertical[v], grid.top);
+        g.lineTo(grid.vertical[v], grid.bottom);
+      }
+      for (var h = 0; h < grid.horizontal.length; h++) {
+        g.moveTo(grid.left, grid.horizontal[h]);
+        g.lineTo(grid.right, grid.horizontal[h]);
+      }
+      g.stroke();
+    }
+    g.restore();
+  }
 }
